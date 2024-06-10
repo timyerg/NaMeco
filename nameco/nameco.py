@@ -664,5 +664,5 @@ opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=da
 opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
 args = parser.parse_args()
 
-if __name__ == '__main__':
+if __name__ == '__nameco__':
     nameco()
