@@ -540,7 +540,42 @@ def taxonomy_annotation(DB, T, OUT, FI, DBpath, log):
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
 
 #Function to run NaMeco 
-def main(args):
+def main():
+    ####################
+    ##### ARGPARSE #####
+    ####################
+    inp_dir_help = " ".join(['Path to the folder with reads, absolute or relative.', 
+                             'Reads should be in the fastq or fq format, gziped or not'])
+    out_dir_help = " ".join(['Path to the directory to store output files, absolute or relative.', 
+                             'If not provided, folder "Nameco_out" will be created in working directory'])
+    subsample_help = " ".join(['Subsample bigger than that threshold clusters for consensus creation and', 
+                               'polishing by Racon and Medaka (default 1000)'])
+    database_help = " ".join(['Database for taxonomy assignment (default GTDB).', 
+                              'Only GTDB or NCBI are currently supported'])
+    db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
+                             'Please use only databases, created by previous NaMeco run to avoid errors'])
+
+    parser = argparse.ArgumentParser()
+    parser._action_groups.pop()
+    req = parser.add_argument_group('required arguments')
+    opt = parser.add_argument_group('optional arguments')
+    req.add_argument("--inp_dir", help=inp_dir_help, required=True)
+    opt.add_argument("--out_dir", help=out_dir_help, default='NaMeco_out')
+    opt.add_argument("--threads", help="The number of threads/cpus (default 2)", type=int, default=2)
+    opt.add_argument("--qc", help="Run chopper for quality control (default)", action='store_true', default=True)
+    opt.add_argument("--no-qc", help="Skip chopper for quality control", dest='qc', action='store_false')
+    opt.add_argument("--phred", help="Minimum phred average score for chopper (default 8)", type=int, default=8)
+    opt.add_argument("--min_length", help="Minimum read length for chopper (default 1300)", type=int, default=1300)
+    opt.add_argument("--max_length", help="Maximum read length for chopper (default 1700)", type=int, default=1700)
+    opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
+    opt.add_argument("--no-low", help="Don't restrict RAM for UMAP (default)", action='store_false', default=False)
+    opt.add_argument("--low", help="Reduce RAM usage by UMAP", dest='no_low', action='store_true',)
+    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 50)", type=int, default=50)
+    opt.add_argument("--subsample", help=subsample_help, type=int, default=1000)
+    opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
+    opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=database_help)
+    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
+    args = parser.parse_args()
     greetings()
     INPDIR = args.inp_dir
     LOGS = f'{args.out_dir}/Logs'
@@ -630,39 +665,4 @@ def main(args):
 
 
 if __name__ == '__main__':
-    ####################
-    ##### ARGPARSE #####
-    ####################
-    inp_dir_help = " ".join(['Path to the folder with reads, absolute or relative.', 
-                             'Reads should be in the fastq or fq format, gziped or not'])
-    out_dir_help = " ".join(['Path to the directory to store output files, absolute or relative.', 
-                             'If not provided, folder "Nameco_out" will be created in working directory'])
-    subsample_help = " ".join(['Subsample bigger than that threshold clusters for consensus creation and', 
-                               'polishing by Racon and Medaka (default 1000)'])
-    database_help = " ".join(['Database for taxonomy assignment (default GTDB).', 
-                              'Only GTDB or NCBI are currently supported'])
-    db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
-                             'Please use only databases, created by previous NaMeco run to avoid errors'])
-
-    parser = argparse.ArgumentParser()
-    parser._action_groups.pop()
-    req = parser.add_argument_group('required arguments')
-    opt = parser.add_argument_group('optional arguments')
-    req.add_argument("--inp_dir", help=inp_dir_help, required=True)
-    opt.add_argument("--out_dir", help=out_dir_help, default='NaMeco_out')
-    opt.add_argument("--threads", help="The number of threads/cpus (default 2)", type=int, default=2)
-    opt.add_argument("--qc", help="Run chopper for quality control (default)", action='store_true', default=True)
-    opt.add_argument("--no-qc", help="Skip chopper for quality control", dest='qc', action='store_false')
-    opt.add_argument("--phred", help="Minimum phred average score for chopper (default 8)", type=int, default=8)
-    opt.add_argument("--min_length", help="Minimum read length for chopper (default 1300)", type=int, default=1300)
-    opt.add_argument("--max_length", help="Maximum read length for chopper (default 1700)", type=int, default=1700)
-    opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
-    opt.add_argument("--no-low", help="Don't restrict RAM for UMAP (default)", action='store_false', default=False)
-    opt.add_argument("--low", help="Reduce RAM usage by UMAP", dest='no_low', action='store_true',)
-    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 50)", type=int, default=50)
-    opt.add_argument("--subsample", help=subsample_help, type=int, default=1000)
-    opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
-    opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=database_help)
-    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
-    args = parser.parse_args()
-    main(args)
+    main()
