@@ -9,5 +9,5 @@ setup(
     author_email='timyerg@gmail.com',
     license='Apache-2.0',
     packages=['nameco'],
-    entry_points={'console_scripts': ['nameco=run_nameco:run_pipeline',],},
+    entry_points={'console_scripts': ['nameco=nameco:run_pipeline',],},
      )
