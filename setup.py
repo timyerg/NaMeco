@@ -10,7 +10,7 @@ setup(
     license='Apache-2.0',
     packages=['nameco'],
     install_requires=['pandas>=2.2',
-		      'python>=3.9',
+		      'python>=3.10.8',
 		      'chopper>=0.7',
 		      'racon>=1.5',
 		      'medaka>=1.11',
