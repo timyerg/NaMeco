@@ -10,7 +10,7 @@ setup(
     license='Apache-2.0',
     packages=['nameco'],
     install_requires=['pandas>=2.2',
-		      'python>=3.7',
+		      'python>=3.9',
 		      'chopper>=0.7',
 		      'racon>=1.5',
 		      'medaka>=1.11',
@@ -20,10 +20,4 @@ setup(
 		      'blast>=2.15',
 		      'spoa>=4.1',
 		      'scikit-learn>=1.5',
-		      'umap-learn>=0.5'],
-    classifiers=[
-        'Intended Audience :: Science/Research',
-        'Operating System :: Linux',        
-        'Programming Language :: Python :: 3.10.8',
-    ],
-)
+		      'umap-learn>=0.5'],)
