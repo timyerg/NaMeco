@@ -11,6 +11,7 @@ import pandas as pd
 import multiprocessing as mp
 import matplotlib.pyplot as plt
 import sklearn.cluster as cluster
+from importlib.metadata import version
 from urllib.request import urlopen
 from collections import Counter
 from itertools import product
@@ -575,6 +576,7 @@ def main():
     opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
     opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=database_help)
     opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
+    opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
     args = parser.parse_args()
     greetings()
     INPDIR = args.inp_dir

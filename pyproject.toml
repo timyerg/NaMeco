@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nameco"
-version = "0.1.2"
+version = "0.1.4"
 authors = [
   { name="Timur Yergaliyev", email="timyerg@gmail.com" },
 ]
@@ -18,10 +18,10 @@ classifiers = [
 ]
 
 [tool.setuptools.package-dir]
-lib = "src/nameco"
+nameco = "src/nameco"
 
 [project.scripts]
-nameco = "lib.run_nameco:main"
+nameco = "nameco.run_nameco:main"
 
 [project.urls]
 Homepage = "https://github.com/timyerg/NaMeco"

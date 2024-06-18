@@ -34,6 +34,8 @@ test:
     - pip
 
 about:
+  dev_url: https://github.com/timyerg/NaMeco
+  home: https://pypi.org/project/nameco/
   summary: Pipeline for the Nanopore 16S long read clustering and taxonomy classification
   license: Apache-2.0
   license_file: LICENSE
