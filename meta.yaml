@@ -1,5 +1,5 @@
 {% set name = "nameco" %}
-{% set version = "0.1.2" %}
+{% set version = "0.1.4" %}
 
 package:
   name: {{ name|lower }}
@@ -7,11 +7,11 @@ package:
 
 source:
   url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/nameco-{{ version }}.tar.gz
-  sha256: c1aa9e2e8636d93af7f86edbd365b2eae201136da1aeb723dfc9f0b0065fe921
+  sha256: 74bccf4bc24119d6874ad26feb2864c42a906aa04135685764218556723e1fb1
 
 build:
   entry_points:
-    - nameco = lib.run_nameco:main
+    - nameco = nameco.run_nameco:main
   noarch: python
   script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
   number: 0
