@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nameco_timyerg"
+version = "0.1.0"
+authors = [
+  { name="Timur Yergaliyev", email="timyerg@gmail.com" },
+]
+description = "Pipeline for the Nanopore 16S long read clustering and taxonomy classification"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache-2.0",
+    "Operating System :: POSIX :: Linux",
+]
+dependencies = [
+    "numpy>=1.22",
+    "pandas>=2.2",
+    "chopper>=0.7",
+    "racon>=1.5",
+    "medaka>=1.11",
+    "minimap2>=2.28",
+    "biopython>=1.83",
+    "matplotlib-base>=3.8",
+    "blast>=2.15",
+    "spoa>=4.1",
+    "scikit-learn>=1.5",
+    "umap-learn>=0.5",
+]
+
+[project.scripts]
+nameco = "run_nameco:main"
+
+[project.urls]
+Homepage = "https://github.com/timyerg/NaMeco"
+Issues = "https://github.com/timyerg/NaMeco/issues"
+
