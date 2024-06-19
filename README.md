@@ -31,8 +31,8 @@ This pipeline can be installed with the following script:
 
 
 ```python
-wget ... #edit
-conda env create --file ... #edit
+wget https://raw.githubusercontent.com/timyerg/NaMeco/main/NaMeco.yaml
+conda env create --file NaMeco.yaml
 ```
 
 ## Running the pipeline
