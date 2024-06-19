@@ -1,0 +1,22 @@
+name: NaMeco
+channels:
+- conda-forge
+- bioconda
+- defaults
+dependencies:
+- pandas=2.2.2
+- python=3.10.8
+- chopper=0.7.0
+- racon=1.5.0
+- medaka=1.11.3
+- minimap2=2.28
+- biopython=1.83
+- matplotlib=3.8.4
+- blast=2.15
+- spoa=4.1.4
+- scikit-learn=1.5.0
+- umap-learn=0.5.5
+- ipykernel
+- pip
+- pip:
+    - nameco
