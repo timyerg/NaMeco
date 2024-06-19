@@ -43,17 +43,15 @@ To run the pipeline, please provide the path to raw reads and adjust threads. Th
 
 
 ```python
-nameco --help
+usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR] [--threads THREADS] [--qc] [--no-qc] [--phred PHRED] [--min_length MIN_LENGTH] [--max_length MAX_LENGTH]
+              [--kmer KMER] [--no-low] [--low] [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE] [--random_state RANDOM_STATE] [--database {GTDB,NCBI}]
+              [--db_path DB_PATH] [--version]
 
 required arguments:
-  --inp_dir INP_DIR     Path to the folder with reads, absolute or relative.
-                        Reads should be in the fastq or fq format, gziped or
-                        not
+  --inp_dir INP_DIR     Path to the folder with reads, absolute or relative. Reads should be in the fastq or fq format, gziped or not
 
 optional arguments:
-  --out_dir OUT_DIR     Path to the directory to store output files, absolute
-                        or relative. If not provided, folder "Nameco_out" will
-                        be created in working directory
+  --out_dir OUT_DIR     Path to the directory to store output files, absolute or relative. If not provided, folder "Nameco_out" will be created in working directory
   --threads THREADS     The number of threads/cpus (default 2)
   --qc                  Run chopper for quality control (default)
   --no-qc               Skip chopper for quality control
@@ -68,17 +66,21 @@ optional arguments:
   --cluster_size CLUSTER_SIZE
                         Minimum cluster size for HDBscan (default 50)
   --subsample SUBSAMPLE
-                        Subsample bigger than that threshold clusters for
-                        consensus creation and polishing by Racon and Medaka
-                        (default 1000)
+                        Subsample bigger than that threshold clusters for consensus creation and polishing by Racon and Medaka (default 1000)
   --random_state RANDOM_STATE
                         Random state for subsampling (default 42)
   --database {GTDB,NCBI}
-                        Database for taxonomy assignment (default GTDB). Only
-                        GTDB or NCBI are currently supported
-  --db_path DB_PATH     Path to store/existing database (default
-                        $out_dir/$database). Please use only databases,
-                        created by previous NaMeco run to avoid errors
+                        Database for taxonomy assignment (default GTDB). Only GTDB or NCBI are currently supported
+  --db_path DB_PATH     Path to store/existing database (default $out_dir/$database). Please use only databases, created by previous NaMeco run to avoid errors
+  --version             Check the version
+```
+
+
+```python
+# example 
+nameco --inp_dir Reads --threads 20 
+
+#where fastq files are located in the "Reads" folder, and 20 threads are requested.
 ```
 
 If the run was killed, it can be relaunched with the same command without deleting output directory. It should start from the same step as it was aborted. If you want to rerun it from the first step, remove output directory, or change output path in the configuration file.
@@ -138,8 +140,8 @@ Example commands are listed below:
 #deactivate NaMeco (if activated)
 conda deactivate
 
-#activate qiime2 env (https://docs.qiime2.org/2024.2/install/native/)
-conda activate qiime2-amplicon-2024.2
+#activate qiime2 env (https://docs.qiime2.org/2024.5/install/native/)
+conda activate qiime2-amplicon-2024.5
 
 mkdir to_qiime2
 
