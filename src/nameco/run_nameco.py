@@ -158,7 +158,7 @@ def plot_clusters(labels, clust_emb, sample, out):
         
         
 #Function to cluster with UMAP + HDBscan
-def clustering_UMAP_HDBscan(OUT, SAMPLES, LOW, T, CLUST_SIZE, RSTAT, log):
+def clustering_UMAP_HDBscan(OUT, SAMPLES, LOW, T, EPS, CLUST_SIZE, RSTAT, log):
     print('\nClustering sequences with UMAP and HDBscan...')
     print('"Noisy" (not assigned to any cluster) reads will be removed')
     skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}/clusters.tsv')
@@ -176,17 +176,17 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, LOW, T, CLUST_SIZE, RSTAT, log):
             continue
         #get clusters
         data = pd.read_csv(f'{OUT}/{sample}/kmers.tsv', sep='\t', index_col=0)
-        clust_emb = umap.UMAP(min_dist=0.5, n_jobs=T, low_memory=LOW, 
+        clust_emb = umap.UMAP(min_dist=0.1, n_jobs=T, low_memory=LOW, n_neighbors=50,
                               metric='braycurtis').fit_transform(data.values)
-        labels = cluster.HDBSCAN(min_cluster_size=CLUST_SIZE, n_jobs=T, 
+        labels = cluster.HDBSCAN(min_cluster_size=CLUST_SIZE, n_jobs=T, cluster_selection_epsilon=EPS,
                  cluster_selection_method='eom').fit_predict(clust_emb)
         clusters = pd.DataFrame({'Feature': data.index, 'Cluster': labels})
         clusters = clusters.loc[clusters.Cluster >= 0]
         clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
         for cid in clusters.Cluster.unique():
             sub = clusters.loc[clusters.Cluster == cid].copy()
-            if len(sub) > 50:
-                sub = sub.sample(n=50, random_state=RSTAT)
+            if len(sub) > 100:
+                sub = sub.sample(n=100, random_state=RSTAT)
             data.loc[sub.Feature.tolist(),'FullID'] = sample+'___'+cid+'___'
         data = data[data['FullID'].notna()]
         data.FullID = data.FullID + data.index.astype(str)
@@ -205,8 +205,8 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, LOW, T, CLUST_SIZE, RSTAT, log):
     data = pd.concat(dfs)
     clust_emb = umap.UMAP(min_dist=0.1, n_jobs=T, low_memory=LOW, 
                           metric='braycurtis').fit_transform(data.values)
-    labels = cluster.HDBSCAN(min_cluster_size=40, n_jobs=T, 
-             cluster_selection_method='leaf').fit_predict(clust_emb)
+    labels = cluster.HDBSCAN(min_cluster_size=150, n_jobs=T, cluster_selection_epsilon=EPS,
+             cluster_selection_method='eom').fit_predict(clust_emb)
     clusters = pd.DataFrame({'Feature': data.index, 'Cluster': labels})
     clusters = clusters.loc[clusters.Cluster >= 0]
     clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
@@ -235,7 +235,7 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
             if len(shar) > 0:
                 shar = shar.groupby('Cluster').size().reset_index(name='counts')
                 shar = shar.sort_values('counts', ascending=False).reset_index()
-                if shar.loc[0, 'counts'] > 25:
+                if shar.loc[0, 'counts'] > 50:
                     clust_dict[shar.loc[0, 'Cluster']] += uniq.index.tolist()
                     counts.loc[shar.loc[0, 'Cluster'], sample] += len(uniq)
                     continue
@@ -374,33 +374,48 @@ def read_correction(T, OUT, FI, log):
         
 
 #Functions for taxonomy annotation with Blast and NCBI
-#working function
-def ncbi_parser(blast, cluster, q):
+def ncbi_parser(blast, taxid, q):
     url = 'https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id={ID}'
     ranks = {
-        'd__': ['"superkingdom">', '<'],
-        'p__': ['"phylum">', '<'],
-        'c__': ['"class">', '<'],
-        'o__': ['"order">', '<'],
-        'f__': ['"family">', '<'],
-        'g__': ['"genus">', '<'],
-        's__': ['Taxonomy browser (', ')']}
-    if cluster not in blast.index:
-        return q.put([cluster, 'unassigned'])
-    ID = str(blast.loc[cluster, 'taxid']).split('.')[0]
+        'd': ['"superkingdom">', '<'],
+        'p': ['"phylum">', '<'],
+        'c': ['"class">', '<'],
+        'o': ['"order">', '<'],
+        'f': ['"family">', '<'],
+        'g': ['"genus">', '<'],
+        's': ['Taxonomy browser (', ')']}
+    ID = str(taxid).strip('.')
     page = urlopen(url.format(ID=ID))
     html_bytes = page.read()
     html = html_bytes.decode("utf-8")
-    taxonomy = [cluster]
+    taxonomy = [taxid]
     for rank, (start, end) in ranks.items():
-        taxonomy.append(rank + html.split(start)[-1].split(end)[0])
+        taxonomy.append(f'{rank}__' + html.split(start)[-1].split(end)[0])
+    taxonomy[-1] = ' '.join(taxonomy[-1].split(' ')[:2])
     return q.put(taxonomy)
 
-def taxonomy_annotation(DB, T, OUT, FI, DBpath, log):
+def taxonomy_thresholds(bclust, thresholds):
+    for ind in bclust.index:
+        taxon = bclust.loc[ind, 'Taxon']
+        last = ''
+        for rank, perc in thresholds.items():
+            prefix = f"{rank[0].lower()}__"
+            pat = taxon.split(prefix)[-1].split(';')[0]
+            if bclust.loc[ind, 'pind'] >= perc:
+                last = pat
+            if bclust.loc[ind, 'pind'] < perc:
+                taxon = taxon.replace(prefix+pat, f"{prefix}{last} unclassified")
+                bclust.loc[ind, 'Taxon'] = taxon
+    return(bclust)
+
+def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
     print(f'Starting taxonomy annotations with blastn against {DB}...')
     Q=f'{FI}/rep_seqs.fasta'
     DBpath = DBpath.format(OUT=OUT, DB=DB)
     queries = [l[1:].split(' ')[0].strip() for l in open(Q, 'rt') if l.startswith('>')]
+    thresholds = {'Domain': 61, 'Phylum': 69, 'Class': 75,
+                  'Order': 83, 'Family': 90, 'Genus': 93, 'Species': 98}
+    taxa = pd.DataFrame(columns=['Taxon', 'Perc. ind.'])
     bash(f'mkdir -p {OUT} {FI}')
     
     #NCBI
@@ -421,49 +436,53 @@ def taxonomy_annotation(DB, T, OUT, FI, DBpath, log):
         if not os.path.exists(f"{OUT}/{DB}-blastn.tsv"):
             print(f'\nAssigning taxonomy...')
             bash(f'blastn -query {Q} -db {DBpath}/16S_ribosomal_RNA -task blastn \
-                   -num_threads {T} -out {OUT}/{DB}-blastn.tsv \
-                   -outfmt "6 qseqid staxids evalue length pident bitscore" 2>> {log}')
+                   -num_threads {T} -out {OUT}/{DB}-blastn.tsv -max_target_seqs 50 -max_hsps 50 \
+                   -outfmt "6 qseqid staxids evalue length pident nident bitscore score gaps" 2>> {log}')
         else:
             print('\nBlastn output exists. Skipping')
             bash(f'echo "Blastn output exists. Skipping." >> {log}')
 
         #select tophit taxonomy
-        blast = pd.read_csv(f"{OUT}/{DB}-blastn.tsv", sep='\t', index_col=0, header=None, 
-                names=['Cluster', 'taxid', 'eval', 'length', 'pind', 'bitscore'])
-        blast = blast.sort_values(['bitscore', 'pind', 'eval'], ascending=[False, False, True])
-        blast = blast.groupby(level=0).first()
-        blast.to_csv(f"{OUT}/{DB}-blastn_tophit.tsv", sep='\t')
+        blast = pd.read_csv(f"{OUT}/{DB}-blastn.tsv", sep='\t', header=None, 
+                names=['Cluster', 'taxid', 'eval', 'length', 'pind', 'nind', 'bitscore', 'score', 'gaps'])
+            
+        blast = blast.sort_values(['bitscore', 'eval'], ascending=[False, False])
 
         #get full taxonomies
         if not os.path.exists(f"{FI}/{DB}-taxonomy.tsv"):
             print('\nParsing NCBI to get full taxonomies...')
             
-            #must use Manager queue here, or will not work
-            q = mp.Manager().Queue()    
-            pool = mp.Pool(T)
-            #fire off workers
-            jobs = []
-            for cluster in queries:
-                job = pool.apply_async(ncbi_parser, (blast, cluster, q))
-                jobs.append(job)
-            [job.get() for job in jobs]
+            for cl in range(len(blast.Cluster.unique())):
+                cluster = f'Cluster_{cl}'
+                bclust = blast.loc[blast.Cluster == cluster].copy()
             
-            #save to dataframes
-            taxa_q2, taxa = pd.DataFrame(), pd.DataFrame()
-            while not q.empty():
-                qout = q.get()
-                cluster, taxonomy = qout[0], qout[1:]
-                taxa_q2.loc[cluster, 'Taxon'] = ';'.join(taxonomy)
-                tax_sep = [t.split('__')[-1] for t in taxonomy]
-                if len(tax_sep) == 1:
-                    tax_sep = tax_sep*7
-                taxa.loc[cluster, ['Domain','Phylum','Class','Order','Family','Genus','Species']] = tax_sep
-            taxa['taxid'] = taxa_q2['taxid'] = blast['taxid']
-            taxa['Perc. identity'] = taxa_q2['Perc. identity'] = blast['pind']
-            taxa_q2.index.rename('Feature ID', inplace=True)
-            taxa.index.rename('Cluster', inplace=True)
-            taxa_q2.to_csv(f'{FI}/{DB}-taxonomy-q2.tsv', sep='\t')
-            taxa.to_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t')
+                #apply "Gap" filtering
+                bclust = bclust.loc[bclust.bitscore >= bclust.bitscore.max() - gap]
+            
+                #get full taxonomies
+                #must use Manager queue here, or will not work
+                q = mp.Manager().Queue()    
+                pool = mp.Pool(T)
+                #fire off workers
+                jobs = []
+                for taxid in bclust.taxid.unique():
+                    job = pool.apply_async(ncbi_parser, (bclust, taxid, q))
+                    jobs.append(job)
+                [job.get() for job in jobs]
+                
+                #add taxonomies with proper identity thresholds
+                while not q.empty():
+                    qout = q.get()
+                    taxid, taxonomy = qout[0], qout[1:]
+                    bclust.loc[bclust.taxid == taxid, 'Taxon'] = ';'.join(taxonomy)
+                bclust = taxonomy_thresholds(bclust, thresholds)
+        
+                #select top hit based on frequency
+                taxa_counts = bclust["Taxon"].value_counts()
+                bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
+                bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
+                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
+                
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
@@ -495,62 +514,71 @@ def taxonomy_annotation(DB, T, OUT, FI, DBpath, log):
         if not os.path.exists(f"{OUT}/{DB}-blastn.tsv"):
             print(f'\nAssigning taxonomy...')
             bash(f'blastn -query {Q} -db {DBpath}/ssu_all.fna -task blastn \
-                   -num_threads {T} -out {OUT}/{DB}-blastn.tsv \
-                   -outfmt "6 qseqid sseqid evalue length pident bitscore" 2>> {log}')
+                   -num_threads {T} -out {OUT}/{DB}-blastn.tsv -max_target_seqs 50 -max_hsps 50 \
+                   -outfmt "6 qseqid sseqid evalue length pident nident bitscore score gaps" 2>> {log}')
         else:
             print('\nBlastn output exists. Skipping')
             bash(f'echo "Blastn output exists. Skipping." >> {log}')
 
         #select tophit taxonomy
-        blast = pd.read_csv(f"{OUT}/{DB}-blastn.tsv", sep='\t', index_col=0, header=None, 
-                names=['Cluster', 'SeqID', 'eval', 'length', 'pind', 'bitscore'])
-        blast = blast.sort_values(['bitscore', 'pind', 'eval'], ascending=[False, False, True])
-        blast = blast.groupby(level=0).first()
-        blast.to_csv(f"{OUT}/{DB}-blastn_tophit.tsv", sep='\t')
+        blast = pd.read_csv(f"{OUT}/{DB}-blastn.tsv", sep='\t', header=None, 
+                names=['Cluster', 'SeqID', 'eval', 'length', 'pind', 'nind', 'bitscore', 'score', 'gaps'])
+        blast = blast.sort_values(['bitscore', 'eval'], ascending=[False, False])
 
         #get full taxonomies
         if not os.path.exists(f"{FI}/{DB}-taxonomy.tsv"):
             print('\nMapping GTDB to get full taxonomies...')
             mapp = pd.read_csv(f'{DBpath}/map.tsv', sep='\t')
+            mapp.Taxonomy = mapp.Taxonomy.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
+                            ' '.join(x.rsplit(';', 1)[-1].replace('_', ' ').replace('  ', '__').split(' ')[:2]))
             mapping = dict(mapp[['SeqID', 'Taxonomy']].values)
-            taxa_q2 = pd.read_csv(f"{OUT}/{DB}-blastn_tophit.tsv", sep='\t', 
-                                  index_col=0, usecols=['Cluster', 'SeqID', 'pind'])
-            taxa_q2['Taxon'] = taxa_q2['SeqID'].map(mapping)
-            taxa_q2['Perc. identity'] = taxa_q2['pind']
-            taxa_q2 = taxa_q2[['Taxon', 'Perc. identity']]
-            taxa = pd.DataFrame()
-            taxa.index = taxa_q2.index
-            taxa.index.names = ['Cluster']
-            ranks = ['Domain','Phylum','Class','Order','Family','Genus','Species']
-            for i, r in enumerate(ranks):
-                taxa[r] = taxa_q2['Taxon'].apply(lambda x: x.split('__')[i+1].split(';')[0])
-            taxa['Perc. identity'] = taxa_q2['Perc. identity']
-            for i, df in enumerate([taxa_q2, taxa]):
-                for query in queries:
-                    if query not in df.index:
-                        if i == 0:
-                            df.loc[query, 'Taxon'] = 'unassigned'
-                        if i == 1:
-                            df.loc[query, ranks] = ['unassigned'] * 7
-            taxa_q2.index.names = ['Feature ID']
-            taxa_q2.to_csv(f'{FI}/{DB}-taxonomy-q2.tsv', sep='\t')
-            taxa.to_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t')
-            #taxa.index.rename('Cluster', inplace=True)
+            
+            for cl in range(len(blast.Cluster.unique())):
+                cluster = f'Cluster_{cl}'
+                bclust = blast.loc[blast.Cluster == cluster].copy()
+    
+                #apply "Gap" filtering
+                bclust = bclust.loc[bclust.bitscore >= bclust.bitscore.max() - gap]
+    
+                #add taxonomies with proper percent identity thresholds
+                bclust['Taxon'] = bclust['SeqID'].map(mapping)
+                bclust = taxonomy_thresholds(bclust, thresholds)
+    
+                #select top hit based on frequency
+                taxa_counts = bclust["Taxon"].value_counts()
+                bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
+                bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
+                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
+            
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
 
+    if len(taxa) != 0:
+        for cluster in queries:
+            if cluster not in blast.Cluster.tolist():
+                taxa.loc[cluster, 'Taxon'] = 'unassigned'
+        taxa.index.rename('Feature ID', inplace=True)
+        taxa.to_csv(f'{FI}/{DB}-taxonomy-q2.tsv', sep='\t')
+        for rank in thresholds:
+            taxa[rank] = taxa.Taxon.apply(lambda x: x.split(f"{rank[0].lower()}__")[-1].split(';')[0])
+        taxa.drop('Taxon', axis=1, inplace=True)
+        taxa.index.rename('Cluster', inplace=True)
+        taxa.to_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t')
+
 #Function to run NaMeco 
 def main():
-    ####################
-    ##### ARGPARSE #####
-    ####################
+    ############
+    # ARGPARSE #
+    ############
     inp_dir_help = " ".join(['Path to the folder with reads, absolute or relative.', 
                              'Reads should be in the fastq or fq format, gziped or not'])
     out_dir_help = " ".join(['Path to the directory to store output files, absolute or relative.', 
                              'If not provided, folder "Nameco_out" will be created in working directory'])
     subsample_help = " ".join(['Subsample bigger than that threshold clusters for consensus creation and', 
                                'polishing by Racon and Medaka (default 1000)'])
+    gap_help = " ".join(['Gap between the bit score of the best hit and others,',
+                        'that are considered with the top hit for taxonomy selection (default 5)'])
     database_help = " ".join(['Database for taxonomy assignment (default GTDB).', 
                               'Only GTDB or NCBI are currently supported'])
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
@@ -571,13 +599,18 @@ def main():
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--no-low", help="Don't restrict RAM for UMAP (default)", action='store_false', default=False)
     opt.add_argument("--low", help="Reduce RAM usage by UMAP", dest='no_low', action='store_true',)
-    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 50)", type=int, default=50)
+    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 500, not less than 100)", type=int, default=500)
     opt.add_argument("--subsample", help=subsample_help, type=int, default=1000)
+    opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.5)", type=float, default=0.5)
+    opt.add_argument("--gap", help=gap_help, type=float, default=5)
     opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
     opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=database_help)
     opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
     opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
     args = parser.parse_args()
+    if args.cluster_size < 100:
+        raise ValueError('Minimum cluster size can not be less than 100')
+    
     greetings()
     INPDIR = args.inp_dir
     LOGS = f'{args.out_dir}/Logs'
@@ -621,7 +654,7 @@ def main():
     kmer_counter(OUT=CL, INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, L=args.kmer, log=log)
     
     #clustering with UMAP + HDBscan
-    clustering_UMAP_HDBscan(OUT=CL, T=args.threads, CLUST_SIZE=args.cluster_size, 
+    clustering_UMAP_HDBscan(OUT=CL, T=args.threads, CLUST_SIZE=args.cluster_size, EPS=args.select_epsilon,
                             SAMPLES=SAMPLES, LOW=args.no_low, RSTAT=args.random_state, log=log)
     
     #pool clusters from samples to shared clusters and recalculate abundances
@@ -654,7 +687,8 @@ def main():
     module = TA.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
-    taxonomy_annotation(DB=args.database, T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, log=log)
+    taxonomy_annotation(DB=args.database, gap=args.gap, T=args.threads, OUT=TA, FI=FI, 
+                        DBpath=args.db_path, log=log)
     if args.database == 'GTDB':
         print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
     if args.database == 'NCBI':

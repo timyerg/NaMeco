@@ -43,15 +43,24 @@ To run the pipeline, please provide the path to raw reads and adjust threads. Th
 
 
 ```python
-usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR] [--threads THREADS] [--qc] [--no-qc] [--phred PHRED] [--min_length MIN_LENGTH] [--max_length MAX_LENGTH]
-              [--kmer KMER] [--no-low] [--low] [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE] [--random_state RANDOM_STATE] [--database {GTDB,NCBI}]
-              [--db_path DB_PATH] [--version]
+usage: run_nameco.py [-h] --inp_dir INP_DIR [--out_dir OUT_DIR]
+                     [--threads THREADS] [--qc] [--no-qc] [--phred PHRED]
+                     [--min_length MIN_LENGTH] [--max_length MAX_LENGTH]
+                     [--kmer KMER] [--no-low] [--low]
+                     [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
+                     [--select_epsilon SELECT_EPSILON] [--gap GAP]
+                     [--random_state RANDOM_STATE] [--database {GTDB,NCBI}]
+                     [--db_path DB_PATH] [--version]
 
 required arguments:
-  --inp_dir INP_DIR     Path to the folder with reads, absolute or relative. Reads should be in the fastq or fq format, gziped or not
+  --inp_dir INP_DIR     Path to the folder with reads, absolute or relative.
+                        Reads should be in the fastq or fq format, gziped or
+                        not
 
 optional arguments:
-  --out_dir OUT_DIR     Path to the directory to store output files, absolute or relative. If not provided, folder "Nameco_out" will be created in working directory
+  --out_dir OUT_DIR     Path to the directory to store output files, absolute
+                        or relative. If not provided, folder "Nameco_out" will
+                        be created in working directory
   --threads THREADS     The number of threads/cpus (default 2)
   --qc                  Run chopper for quality control (default)
   --no-qc               Skip chopper for quality control
@@ -64,20 +73,34 @@ optional arguments:
   --no-low              Don't restrict RAM for UMAP (default)
   --low                 Reduce RAM usage by UMAP
   --cluster_size CLUSTER_SIZE
-                        Minimum cluster size for HDBscan (default 50)
+                        Minimum cluster size for HDBscan (default 500, not
+                        less than 100)
   --subsample SUBSAMPLE
-                        Subsample bigger than that threshold clusters for consensus creation and polishing by Racon and Medaka (default 1000)
+                        Subsample bigger than that threshold clusters for
+                        consensus creation and polishing by Racon and Medaka
+                        (default 1000)
+  --select_epsilon SELECT_EPSILON
+                        Selection epsilon for clusters (default 0.5)
+  --gap GAP             Gap between the bit score of the best hit and others,
+                        that are considered with the top hit for taxonomy
+                        selection (default 5)
   --random_state RANDOM_STATE
                         Random state for subsampling (default 42)
   --database {GTDB,NCBI}
-                        Database for taxonomy assignment (default GTDB). Only GTDB or NCBI are currently supported
-  --db_path DB_PATH     Path to store/existing database (default $out_dir/$database). Please use only databases, created by previous NaMeco run to avoid errors
+                        Database for taxonomy assignment (default GTDB). Only
+                        GTDB or NCBI are currently supported
+  --db_path DB_PATH     Path to store/existing database (default
+                        $out_dir/$database). Please use only databases,
+                        created by previous NaMeco run to avoid errors
   --version             Check the version
 ```
 
 
 ```python
 # example 
+
+conda activate NaMeco
+
 nameco --inp_dir Reads --threads 20 
 
 #where fastq files are located in the "Reads" folder, and 20 threads are requested.
