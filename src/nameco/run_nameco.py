@@ -29,8 +29,7 @@ def bash(cmd):
 #Function to print greetings 
 def greetings():
     grt = """
-Hello!
-Thank you for using our tool.
+Thank you for using our tool!
 
 ######################################################
 #                                                    #
@@ -119,7 +118,6 @@ def kmer_counter(OUT, INPUT, SAMPLES, L, T, log):
     nucleotides = 'ACGT'
     kmers = product(nucleotides, repeat=L)
     kmers = [''.join(c) for c in kmers]
-    
     for sample in SAMPLES:
         file = glob.glob(f"{INPUT}/{sample}.f*q*")[0]
         out = f'{OUT}/{sample}'
@@ -294,9 +292,9 @@ def fq_by_cluster(INPUT, subs, OUT, T, log):
         bash(f'cat {" ".join(inp)} > {big}')
         if big.endswith('.gz'):
             bash(f'gunzip {big}')
-
     #must use Manager queue here, or will not work
     pool = mp.Pool(T)
+    
     #fire off workers
     jobs = []
     for cluster in clusters:
@@ -305,7 +303,7 @@ def fq_by_cluster(INPUT, subs, OUT, T, log):
         job = pool.apply_async(fq_splitter, (out, cluster, log))
         jobs.append(job)
     [job.get() for job in jobs]
-
+    
     #pool consensuses
     with open(file, 'w') as pooled:
         for cluster in clusters:
@@ -313,9 +311,9 @@ def fq_by_cluster(INPUT, subs, OUT, T, log):
                 pooled.write(cons.read())
                 
 
-#Function for read correction (Racon and Medaka)
+#Function for read correction (Racon)
 def read_correction(T, OUT, FI, log):
-    print(f'Polishing with Racon (2 rounds) and Medaka...')
+    print(f'Polishing with Racon...')
     bash(f'mkdir -p {OUT}')
     file = f'{OUT}/../Clustering/consensus_pooled.fa'
     corr = f'{FI}/rep_seqs.fasta'
@@ -326,51 +324,29 @@ def read_correction(T, OUT, FI, log):
         if os.stat(corr).st_size > 0 and os.stat(file).st_size > 0:
             if int(bash(f'grep -c "^>" {file}')) == int(bash(f'grep -c "^>" {corr}')):
                 return print(f'Consensuses for all clusters were already corrected. Skipping')
-                
     for cluster in clusters:
-        if os.path.exists(f'{OUT}/{cluster}_medaka.fa') and cluster in skip:
+        po = f"{OUT}/{cluster}_racon.fa"
+        if os.path.exists(po) and cluster in skip:
             continue
         fa = f'{OUT}/../Clustering/Clusters_subsampled/{cluster}_consensus.fa'
         sam = f"{OUT}/{cluster}.sam"
         fq = f'{OUT}/../Clustering/Clusters_subsampled/{cluster}.fq.gz'
-        po = f"{OUT}/{cluster}_racon.fa"
         bash(f'echo "\n##### Processing {cluster} #####" >> {log}')
 
         #overlaping with minimap2 1
-        bash(f'echo "\nMapping {cluster} 1" >> {log}')
+        bash(f'echo "\nMapping {cluster}" >> {log}')
         bash(f"minimap2 -ax map-ont -t {T} {fa} {fq} -o {sam} 2>> {log}")
 
         #polishing with racon 1
-        bash(f'echo "\nPolishing with Racon {cluster} 1" >> {log}')
+        bash(f'echo "\nPolishing with Racon {cluster}" >> {log}')
         bash(f'racon -m 8 -x -6 -g -8 -t {T} {fq} {sam} {fa} > {po} 2>> {log}')
         bash(f'rm {sam}')
-
-        #overlaping with minimap2 2
-        bash(f'echo "\nMapping {cluster} 2" >> {log}')
-        bash(f"minimap2 -ax map-ont -t {T} {po} {fq} -o {sam} 2>> {log}")
-
-        #polishing with racon 2
-        po2 = f"{OUT}/{cluster}_racon2.fa"
-        bash(f'echo "\nPolishing with Racon {cluster} 2" >> {log}')
-        bash(f'racon -m 8 -x -6 -g -8 -t {T} {fq} {sam} {po} > {po2} 2>> {log}')
-        bash(f'rm {sam}')
-
-        #polishing with medaka
-        medaka = f'{OUT}/Medaka/{cluster}'
-        bash(f'echo "\nPolishing with Medaka {cluster}" >> {log}')
-        bash(f'mkdir -p {medaka}')
-        bash(f'medaka_consensus -x -i {fq} -d {po2} -o {medaka} -f -t {T} 2>> {log}')
-        bash(f'echo "\n{cluster} done. Enjoy" >> {log}')
-        bash(f'mv {medaka}/consensus.fasta {OUT}/{cluster}_medaka.fa')           
-    #clean and move
-    if os.path.exists(f"{OUT}/Medaka"):
-        bash(f'rm -r {OUT}/*_racon*.fa* {OUT}/Medaka')
-    
+        
     #collect corrected sequences
     with open(corr, "w") as corrected:
         for cluster in clusters:
-            with open(f"{OUT}/{cluster}_medaka.fa", "rt") as rep:
-                corrected.write(rep.read())
+            with open(f"{OUT}/{cluster}_racon.fa", "rt") as rep:
+                corrected.write(">{id}\n{seq}\n".format(id=cluster, seq=rep.read().split('\n')[1],))
         
 
 #Functions for taxonomy annotation with Blast and NCBI
@@ -384,6 +360,7 @@ def ncbi_parser(blast, taxid, q):
         'f': ['"family">', '<'],
         'g': ['"genus">', '<'],
         's': ['Taxonomy browser (', ')']}
+    
     ID = str(taxid).strip('.')
     page = urlopen(url.format(ID=ID))
     html_bytes = page.read()
@@ -445,13 +422,11 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
         #select tophit taxonomy
         blast = pd.read_csv(f"{OUT}/{DB}-blastn.tsv", sep='\t', header=None, 
                 names=['Cluster', 'taxid', 'eval', 'length', 'pind', 'nind', 'bitscore', 'score', 'gaps'])
-            
         blast = blast.sort_values(['bitscore', 'eval'], ascending=[False, False])
 
         #get full taxonomies
         if not os.path.exists(f"{FI}/{DB}-taxonomy.tsv"):
             print('\nParsing NCBI to get full taxonomies...')
-            
             for cl in range(len(blast.Cluster.unique())):
                 cluster = f'Cluster_{cl}'
                 bclust = blast.loc[blast.Cluster == cluster].copy()
@@ -481,8 +456,7 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 taxa_counts = bclust["Taxon"].value_counts()
                 bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
                 bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
-                
+                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]     
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
@@ -509,7 +483,7 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
         else:
             print('Database exists. Skipping')
             bash(f'echo "{DB} database exists. Skipping." >> {log}')
-        
+            
         #annotate
         if not os.path.exists(f"{OUT}/{DB}-blastn.tsv"):
             print(f'\nAssigning taxonomy...')
@@ -532,7 +506,6 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
             mapp.Taxonomy = mapp.Taxonomy.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
                             ' '.join(x.rsplit(';', 1)[-1].replace('_', ' ').replace('  ', '__').split(' ')[:2]))
             mapping = dict(mapp[['SeqID', 'Taxonomy']].values)
-            
             for cl in range(len(blast.Cluster.unique())):
                 cluster = f'Cluster_{cl}'
                 bclust = blast.loc[blast.Cluster == cluster].copy()
@@ -548,16 +521,15 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 taxa_counts = bclust["Taxon"].value_counts()
                 bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
                 bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
-            
+                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]  
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
-
+            
     if len(taxa) != 0:
         for cluster in queries:
             if cluster not in blast.Cluster.tolist():
-                taxa.loc[cluster, 'Taxon'] = 'unassigned'
+                taxa.loc[cluster, 'Taxon'] = 'Unclassified'
         taxa.index.rename('Feature ID', inplace=True)
         taxa.to_csv(f'{FI}/{DB}-taxonomy-q2.tsv', sep='\t')
         for rank in thresholds:
@@ -599,7 +571,7 @@ def main():
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--no-low", help="Don't restrict RAM for UMAP (default)", action='store_false', default=False)
     opt.add_argument("--low", help="Reduce RAM usage by UMAP", dest='no_low', action='store_true',)
-    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 500, not less than 100)", type=int, default=500)
+    opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 500, not < 100!)", type=int, default=500)
     opt.add_argument("--subsample", help=subsample_help, type=int, default=1000)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.5)", type=float, default=0.5)
     opt.add_argument("--gap", help=gap_help, type=float, default=5)
@@ -663,7 +635,6 @@ def main():
     
     #spliting fasta by cluster
     fq_by_cluster(INPUT=INPDIR, subs=args.subsample, OUT=CL, T=args.threads, log=log)
-    
     print('\nPlease, cite UMAP: https://doi.org/10.21105/joss.00861')
     print('Please, cite HDBscan: https://doi.org/10.21105/joss.00205')
     print('Please, cite SPOA: https://doi.org/10.1101%2Fgr.214270.116')
@@ -678,7 +649,6 @@ def main():
     read_correction(OUT=RC, FI=FI, T=args.threads, log=log)
     print('\nPlease, cite minimap2: https://doi.org/10.1093/bioinformatics/bty191')
     print('Please, cite racon: https://doi.org/10.1101%2Fgr.214270.116')
-    print('Please, cite medaka: https://github.com/nanoporetech/medaka')
     print(f"\nEnd of the {module.replace('_', ' ')} module")
 
     #######################
@@ -695,10 +665,8 @@ def main():
         print('\nPlease, cite NCBI database: https://doi.org/10.1093/nar/gkab1112')
     print('\nPlease, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
     print(f"\nEnd of the {module.replace('_', ' ')} module")
-
     module = "NaMeco run successfully completed. Enjoy your data!"
     hashtags_wrapper(f"{module.replace('_', ' ')}")
-
 
 if __name__ == '__main__':
     main()

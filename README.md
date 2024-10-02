@@ -7,7 +7,7 @@ If you used our pipelines, please cite this paper: XXX
 ## Why this pipeline was created?
 16S long Nanopore reads have an advantage in terms of length compared with Illumina short reads and have the potential for better taxonomical annotations. However, in practice, due to the relatively high error rate, reads produced by Nanopore are more challenging to handle. The combination of longer length and higher error rate results in a higher number of unique reads. When we tried to use blast on unclustered Nanopore reads, a dataset with 170 samples was not finished on the HPC with 24 threads in a month. However, clustering Nanopore reads at a 97% similarity threshold did not improve the situation, only slightly decreasing the number of unique features (sequences). 
 
-Here, we decided to merge ideas from such pipelines as NanoCLUST, NGSpeciesID and Natrix2 and create one pipeline ~to rule them all~ that will combine the advantages of above mentioned tools. So, it will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample 50 representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA, Racon and Medaka. Taxonomy will be assigned based on either GTDB or NCBI databases.
+Here, we decided to merge ideas from such pipelines as NanoCLUST, NGSpeciesID and Natrix2 and create one pipeline ~to rule them all~ that will combine the advantages of above mentioned tools. So, it will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample 50 representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
 
 ## Dependencies 
 Linux OS with conda installed (anaconda3 or miniconda3). 
@@ -16,7 +16,6 @@ Linux OS with conda installed (anaconda3 or miniconda3).
 - python=3.10.8
 - chopper=0.7.0
 - racon=1.5.0
-- medaka=1.11.3
 - minimap2=2.28
 - umap-learn=0.5.5
 - biopython=1.83
@@ -137,7 +136,7 @@ It is the main output of the pipeline.
 Counts of clusters are stored in the "Final_output" folder.
 
 ### Read_correction
-Contains fasta files with "best" read for each cluster, polished by two rounds of racon and one of Medaka.
+Contains fasta files with "best" read for each cluster, polished by Racon.
 These reads are merged into one fasta file in the "Final_output" folder.
 
 ### Taxonomy_annotation

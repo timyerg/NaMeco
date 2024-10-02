@@ -1,6 +1,4 @@
 *.ipynb
 .ipynb_checkpoints/
 Old/
-Dev/
-nameco/
 dist/
