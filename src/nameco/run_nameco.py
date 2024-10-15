@@ -3,6 +3,7 @@ import os
 import re
 import glob
 import gzip
+import time
 import random
 import argparse
 import subprocess
@@ -233,7 +234,7 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
             if len(shar) > 0:
                 shar = shar.groupby('Cluster').size().reset_index(name='counts')
                 shar = shar.sort_values('counts', ascending=False).reset_index()
-                if shar.loc[0, 'counts'] > 50:
+                if shar.loc[0, 'counts'] > 40:
                     clust_dict[shar.loc[0, 'Cluster']] += uniq.index.tolist()
                     counts.loc[shar.loc[0, 'Cluster'], sample] += len(uniq)
                     continue
@@ -351,6 +352,7 @@ def read_correction(T, OUT, FI, log):
 
 #Functions for taxonomy annotation with Blast and NCBI
 def ncbi_parser(blast, taxid, q):
+    time.sleep(5) #bypass NCBI restriction
     url = 'https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id={ID}'
     ranks = {
         'd': ['"superkingdom">', '<'],
@@ -361,14 +363,17 @@ def ncbi_parser(blast, taxid, q):
         'g': ['"genus">', '<'],
         's': ['Taxonomy browser (', ')']}
     
-    ID = str(taxid).strip('.')
-    page = urlopen(url.format(ID=ID))
+    ID = str(taxid).split('.')[0]
+    page = urlopen(url.format(ID=ID), timeout=360)
     html_bytes = page.read()
     html = html_bytes.decode("utf-8")
     taxonomy = [taxid]
     for rank, (start, end) in ranks.items():
         taxonomy.append(f'{rank}__' + html.split(start)[-1].split(end)[0])
-    taxonomy[-1] = ' '.join(taxonomy[-1].split(' ')[:2])
+    last = taxonomy[-1]
+    while len(taxonomy) < 7:
+        taxonomy.append(f'{taxonomy[-1]}')
+    taxonomy[-1] = ' '.join(taxonomy[-1].split(' ')[:2]).replace('incertae', 'incertae sedis')
     return q.put(taxonomy)
 
 def taxonomy_thresholds(bclust, thresholds):
@@ -389,10 +394,10 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
     print(f'Starting taxonomy annotations with blastn against {DB}...')
     Q=f'{FI}/rep_seqs.fasta'
     DBpath = DBpath.format(OUT=OUT, DB=DB)
-    queries = [l[1:].split(' ')[0].strip() for l in open(Q, 'rt') if l.startswith('>')]
+    queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
     thresholds = {'Domain': 61, 'Phylum': 69, 'Class': 75,
                   'Order': 83, 'Family': 90, 'Genus': 93, 'Species': 98}
-    taxa = pd.DataFrame(columns=['Taxon', 'Perc. ind.'])
+    taxa = pd.DataFrame(columns=['Taxon', 'Perc. id.'])
     bash(f'mkdir -p {OUT} {FI}')
     
     #NCBI
@@ -437,7 +442,7 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 #get full taxonomies
                 #must use Manager queue here, or will not work
                 q = mp.Manager().Queue()    
-                pool = mp.Pool(T)
+                pool = mp.Pool(2) #otherwise it will be blocked by NCBI
                 #fire off workers
                 jobs = []
                 for taxid in bclust.taxid.unique():
@@ -455,8 +460,8 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 #select top hit based on frequency
                 taxa_counts = bclust["Taxon"].value_counts()
                 bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
-                bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]     
+                bclust.sort_values(["Taxa_counts", 'bitscore', 'pind'], ascending=[False, False, False], inplace=True)
+                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
@@ -520,8 +525,8 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 #select top hit based on frequency
                 taxa_counts = bclust["Taxon"].value_counts()
                 bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
-                bclust.sort_values(["Taxa_counts", 'bitscore'], ascending=[False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. ind.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]  
+                bclust.sort_values(["Taxa_counts", 'bitscore', 'pind'], ascending=[False, False, False], inplace=True)
+                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]  
         else:
             print('\nTaxonomy exists. Skipping')
             bash(f'echo "Taxonomy exists. Skipping." >> {log}')
@@ -537,7 +542,22 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
         taxa.drop('Taxon', axis=1, inplace=True)
         taxa.index.rename('Cluster', inplace=True)
         taxa.to_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t')
-
+        
+    #collapse taxonomies
+    print('\nChecking if collapsed taxonomies exist...')
+    taxa = pd.read_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t', index_col=0)
+    counts = pd.read_csv(f'{FI}/cluster_counts.tsv', sep='\t', index_col=0)
+    
+    for rank in thresholds:
+        if os.path.exists(f"{FI}/{DB}-taxonomy-{rank}.tsv"):
+            continue
+        print(f'Collapsing to {rank}')
+        coll = counts.copy()
+        coll[rank] = taxa[rank]
+        coll = coll.groupby(rank).sum()
+        coll.to_csv(f"{FI}/{DB}-taxonomy-{rank}.tsv", sep='\t')
+        
+        
 #Function to run NaMeco 
 def main():
     ############

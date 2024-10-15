@@ -1,13 +1,11 @@
-# NaMeco
-This pipeline was written for processing full-length 16S Nanopore reads
+![](logo/NaMeco_logo.png)
 
-## Citation
-If you used our pipelines, please cite this paper: XXX
+# Processing full-length 16S Nanopore reads
 
 ## Why this pipeline was created?
 16S long Nanopore reads have an advantage in terms of length compared with Illumina short reads and have the potential for better taxonomical annotations. However, in practice, due to the relatively high error rate, reads produced by Nanopore are more challenging to handle. The combination of longer length and higher error rate results in a higher number of unique reads. When we tried to use blast on unclustered Nanopore reads, a dataset with 170 samples was not finished on the HPC with 24 threads in a month. However, clustering Nanopore reads at a 97% similarity threshold did not improve the situation, only slightly decreasing the number of unique features (sequences). 
 
-Here, we decided to merge ideas from such pipelines as NanoCLUST, NGSpeciesID and Natrix2 and create one pipeline ~to rule them all~ that will combine the advantages of above mentioned tools. So, it will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample 50 representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
+Here, we decided to merge ideas from different exsisting tools and create one pipeline ~to rule them all~ that will combine all the advantages they have. So, Nameco will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
 
 ## Dependencies 
 Linux OS with conda installed (anaconda3 or miniconda3). 
@@ -33,6 +31,15 @@ This pipeline can be installed with the following script:
 wget https://raw.githubusercontent.com/timyerg/NaMeco/main/NaMeco.yaml
 conda env create --file NaMeco.yaml
 ```
+
+To update the NaMeco version inside of already created environment, one can use the following command:
+
+
+```python
+pip install nameco --upgrade
+```
+
+Attention! The command above will only upgrade NaMeco script. If some dependencies are outdated, just delete the environment and reisnstall it.
 
 ## Running the pipeline
 This pipeline takes Nanopore reads as input in fastq format. It will automatically recognize .fastq, .fq extensions. Reads also can be gziped (.fastq.gz, .fq.gz)
@@ -72,8 +79,8 @@ optional arguments:
   --no-low              Don't restrict RAM for UMAP (default)
   --low                 Reduce RAM usage by UMAP
   --cluster_size CLUSTER_SIZE
-                        Minimum cluster size for HDBscan (default 500, not
-                        less than 100)
+                        Minimum cluster size for HDBscan (default 500, not <
+                        100!)
   --subsample SUBSAMPLE
                         Subsample bigger than that threshold clusters for
                         consensus creation and polishing by Racon and Medaka
@@ -99,7 +106,6 @@ optional arguments:
 # example 
 
 conda activate NaMeco
-
 nameco --inp_dir Reads --threads 20 
 
 #where fastq files are located in the "Reads" folder, and 20 threads are requested.
@@ -117,6 +123,7 @@ It is the main output of the pipeline.
 - rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA, two rounds of Racon and one of Medaka)
 - DB-taxonomy.tsv - tab-separated table, cluster IDs and taxonomy annotations (ranks by columns), read length and percent identity from blast.
 - DB-taxonomy-q2.tsv - same as above, but in Qiime2 format (all ranks pooled, separated by ";" and prefixed with "r__", where r is the first character of the rank). It can be imported to qiime2.
+- DB-taxonomy-rank.tsv - collapsed to corresponding rank taxonomies with counts.
 
 ### Quality_control
 - Chopper - contains reads after QC with Chopper.
@@ -142,7 +149,6 @@ These reads are merged into one fasta file in the "Final_output" folder.
 ### Taxonomy_annotation
 - GTDB/NCBI - folder with GTDB/NCBI 16S database
 - DB-blastn.tsv - output from blastn run with
-- DB-blastn_tophit.tsv - tophit annotation for each cluster
 
 For NCBI database, full taxonomies are parsed from the NCBI website based on taxid. Final taxonomy tables are stored in the "Final_output" folder.
 
@@ -194,7 +200,16 @@ qiime tools import \
 ```
 
 ## Developer recommendations
-All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs since Cluster IDs would not match.
+- All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs since Cluster IDs would not match. If needed, we recommend to collapse clusters to the species level, them different reads can be merged.
+- Adjust minimum cluster size according to your reads depth. Default 500 should work for most of the samples, but one don't have a lot of reads in a sample, then it should be decreased
 
 ## Unassigned sequences
 When I blasted unassigned sequences from different datasets I tested on the NCBI blastn, those sequences were annotated as host DNA. Somehow host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences, or blast it on the NCBI to double check. 
+
+## Errors
+
+- Error with "FullID": that means that you have at least one sample with low amount of reads. Try to decrease minimum cluster size or remove the sample with low amount of reads.
+- TypeError("cannot pickle '_io.BufferedReader' object") with NCBI database: some issues with the NCBI website, relaunch later - it will start from the parsing step.
+
+## Citation
+If you used our pipelines, please cite this paper: (will be added later)
