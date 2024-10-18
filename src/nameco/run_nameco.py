@@ -256,6 +256,7 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
                 v = random.sample(v, SUBS)
             with open(f"{OUT}/Clusters_subsampled/{k}.txt", "w") as clust:
                 clust.write("{}".format('\n'.join(v)))
+    counts.sort_index(key=lambda x: (x.to_series().str[8:].astype(int)), inplace=True)
     counts.to_csv(f'{FI}/cluster_counts.tsv', sep='\t')
     bash(f'echo "\nFeatures were stored by each shared cluster" >> {log}')
     print("\nFeatures were stored by each shared cluster")
