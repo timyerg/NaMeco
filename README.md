@@ -3,9 +3,11 @@
 # Processing full-length 16S Nanopore reads
 
 ## Why this pipeline was created?
-16S long Nanopore reads have an advantage in terms of length compared with Illumina short reads and have the potential for better taxonomical annotations. However, in practice, due to the relatively high error rate, reads produced by Nanopore are more challenging to handle. The combination of longer length and higher error rate results in a higher number of unique reads. When we tried to use blast on unclustered Nanopore reads, a dataset with 170 samples was not finished on the HPC with 24 threads in a month. However, clustering Nanopore reads at a 97% similarity threshold did not improve the situation, only slightly decreasing the number of unique features (sequences). 
+16S long Nanopore reads have an advantage in terms of length compared with Illumina short reads and have the potential for better taxonomical annotations. However, in practice, due to the relatively high error rate, reads produced by Nanopore are more challenging to handle. The combination of longer length and higher error rate results in a higher number of unique reads. Moreover, clustering Nanopore reads at a 97% similarity threshold did not improve the situation, only slightly decreasing the number of unique features (sequences). 
 
-Here, we decided to merge ideas from different exsisting tools and create one pipeline ~to rule them all~ that will combine all the advantages they have. So, Nameco will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
+Here, we decided to merge ideas from different exsisting tools and create one pipeline ~to rule them all~ that will be able to provide taxonomy annotations at the species level and will be easy to handle. 
+
+So, Nameco will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
 
 ## Dependencies 
 Linux OS with conda installed (anaconda3 or miniconda3). 
@@ -32,7 +34,7 @@ wget https://raw.githubusercontent.com/timyerg/NaMeco/main/NaMeco.yaml
 conda env create --file NaMeco.yaml
 ```
 
-To update the NaMeco version inside of already created environment, one can use the following command:
+To update (only if needed!) the NaMeco version inside of already created environment, one can use the following command:
 
 
 ```python
@@ -55,6 +57,7 @@ usage: run_nameco.py [-h] --inp_dir INP_DIR [--out_dir OUT_DIR]
                      [--kmer KMER] [--no-low] [--low]
                      [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
                      [--select_epsilon SELECT_EPSILON] [--gap GAP]
+                     [--min_fraction MIN_FRACTION]
                      [--random_state RANDOM_STATE] [--database {GTDB,NCBI}]
                      [--db_path DB_PATH] [--version]
 
@@ -83,13 +86,18 @@ optional arguments:
                         100!)
   --subsample SUBSAMPLE
                         Subsample bigger than that threshold clusters for
-                        consensus creation and polishing by Racon and Medaka
-                        (default 1000)
+                        consensus creation and polishing by Racon (default
+                        500)
   --select_epsilon SELECT_EPSILON
                         Selection epsilon for clusters (default 0.5)
   --gap GAP             Gap between the bit score of the best hit and others,
                         that are considered with the top hit for taxonomy
-                        selection (default 5)
+                        selection (default 1)
+  --min_fraction MIN_FRACTION
+                        If numerous hits retained after gap filtering,
+                        consensus taxon should have at least this fraction to
+                        be selected. Otherwise it will be set to lower level +
+                        unclassified (default 0.6)
   --random_state RANDOM_STATE
                         Random state for subsampling (default 42)
   --database {GTDB,NCBI}
@@ -212,4 +220,4 @@ When I blasted unassigned sequences from different datasets I tested on the NCBI
 - TypeError("cannot pickle '_io.BufferedReader' object") with NCBI database: some issues with the NCBI website, relaunch later - it will start from the parsing step.
 
 ## Citation
-If you used our pipelines, please cite this paper: (will be added later)
+If you used NaMeco tool, please cite our paper: (will be added later)

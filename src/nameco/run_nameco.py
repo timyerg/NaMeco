@@ -49,7 +49,6 @@ Thank you for using our tool!
 
 Written by Timur Yergaliyev
 Powered by Coffee
-Inspired by the nanopore dataset I struggled with
 If you used this pipeline, please cite our paper: XXX
 Also, don't forget to cite the tools that were used in this pipeline
     """
@@ -145,6 +144,7 @@ def kmer_counter(OUT, INPUT, SAMPLES, L, T, log):
     bash(f'echo "\nK-mers counted." >> {log}')
     
 
+#Function to plot clusters
 def plot_clusters(labels, clust_emb, sample, out):
     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
     clustered = (labels >= 0)
@@ -349,7 +349,7 @@ def read_correction(T, OUT, FI, log):
         for cluster in clusters:
             with open(f"{OUT}/{cluster}_racon.fa", "rt") as rep:
                 corrected.write(">{id}\n{seq}\n".format(id=cluster, seq=rep.read().split('\n')[1],))
-        
+
 
 #Functions for taxonomy annotation with Blast and NCBI
 def ncbi_parser(blast, taxid, q):
@@ -377,6 +377,7 @@ def ncbi_parser(blast, taxid, q):
     taxonomy[-1] = ' '.join(taxonomy[-1].split(' ')[:2]).replace('incertae', 'incertae sedis')
     return q.put(taxonomy)
 
+#apply thresholds based on percent identity to mask false positive annotations
 def taxonomy_thresholds(bclust, thresholds):
     for ind in bclust.index:
         taxon = bclust.loc[ind, 'Taxon']
@@ -391,7 +392,17 @@ def taxonomy_thresholds(bclust, thresholds):
                 bclust.loc[ind, 'Taxon'] = taxon
     return(bclust)
 
-def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
+#select top-hit based on consensus taxonomy
+def top_hit(bclust, taxa, frac):
+    taxa_counts = bclust["Taxon"].value_counts()
+    bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
+    bclust.sort_values(["Taxa_counts", 'bitscore', 'pind'], ascending=[False, False, False], inplace=True)
+    taxon, pind = bclust.Taxon.iloc[0], bclust.pind.iloc[0]
+    if len(bclust.loc[bclust.Taxa_counts==bclust.Taxa_counts.max()])/len(bclust) < frac:
+        taxon = taxon.rsplit(';',1)[0] + taxon.rsplit(';',1)[-1].split(' ')[0] + ' unclassified'
+    return taxon, pind
+
+def taxonomy_annotation(DB, gap, frac, T, OUT, FI, DBpath, log):
     print(f'Starting taxonomy annotations with blastn against {DB}...')
     Q=f'{FI}/rep_seqs.fasta'
     DBpath = DBpath.format(OUT=OUT, DB=DB)
@@ -459,13 +470,10 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
                 bclust = taxonomy_thresholds(bclust, thresholds)
         
                 #select top hit based on frequency
-                taxa_counts = bclust["Taxon"].value_counts()
-                bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
-                bclust.sort_values(["Taxa_counts", 'bitscore', 'pind'], ascending=[False, False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]
+                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = top_hit(bclust, taxa, frac)
         else:
             print('\nTaxonomy exists. Skipping')
-            bash(f'echo "Taxonomy exists. Skipping." >> {log}')
+            bash(f'echo "Taxonomy exists. Skipping." >> {log}')  
             
     #GTDB
     if DB == 'GTDB':
@@ -488,8 +496,7 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
             bash(f'rm {DBpath}/ssu_all.fna')
         else:
             print('Database exists. Skipping')
-            bash(f'echo "{DB} database exists. Skipping." >> {log}')
-            
+            bash(f'echo "{DB} database exists. Skipping." >> {log}')   
         #annotate
         if not os.path.exists(f"{OUT}/{DB}-blastn.tsv"):
             print(f'\nAssigning taxonomy...')
@@ -515,23 +522,16 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
             for cl in range(len(blast.Cluster.unique())):
                 cluster = f'Cluster_{cl}'
                 bclust = blast.loc[blast.Cluster == cluster].copy()
-    
                 #apply "Gap" filtering
-                bclust = bclust.loc[bclust.bitscore >= bclust.bitscore.max() - gap]
-    
+                bclust = bclust.loc[bclust.bitscore > bclust.bitscore.max() - gap]
                 #add taxonomies with proper percent identity thresholds
                 bclust['Taxon'] = bclust['SeqID'].map(mapping)
                 bclust = taxonomy_thresholds(bclust, thresholds)
-    
                 #select top hit based on frequency
-                taxa_counts = bclust["Taxon"].value_counts()
-                bclust["Taxa_counts"] = bclust["Taxon"].map(taxa_counts)
-                bclust.sort_values(["Taxa_counts", 'bitscore', 'pind'], ascending=[False, False, False], inplace=True)
-                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = [bclust.Taxon.iloc[0], bclust.pind.iloc[0]]  
+                taxa.loc[cluster, ['Taxon', 'Perc. id.']] = top_hit(bclust, taxa, frac)  
         else:
             print('\nTaxonomy exists. Skipping')
-            bash(f'echo "Taxonomy exists. Skipping." >> {log}')
-            
+            bash(f'echo "Taxonomy exists. Skipping." >> {log}')  
     if len(taxa) != 0:
         for cluster in queries:
             if cluster not in blast.Cluster.tolist():
@@ -548,7 +548,6 @@ def taxonomy_annotation(DB, gap, T, OUT, FI, DBpath, log):
     print('\nChecking if collapsed taxonomies exist...')
     taxa = pd.read_csv(f'{FI}/{DB}-taxonomy.tsv', sep='\t', index_col=0)
     counts = pd.read_csv(f'{FI}/cluster_counts.tsv', sep='\t', index_col=0)
-    
     for rank in thresholds:
         if os.path.exists(f"{FI}/{DB}-taxonomy-{rank}.tsv"):
             continue
@@ -569,9 +568,11 @@ def main():
     out_dir_help = " ".join(['Path to the directory to store output files, absolute or relative.', 
                              'If not provided, folder "Nameco_out" will be created in working directory'])
     subsample_help = " ".join(['Subsample bigger than that threshold clusters for consensus creation and', 
-                               'polishing by Racon and Medaka (default 1000)'])
+                               'polishing by Racon (default 500)'])
     gap_help = " ".join(['Gap between the bit score of the best hit and others,',
-                        'that are considered with the top hit for taxonomy selection (default 5)'])
+                        'that are considered with the top hit for taxonomy selection (default 1)'])
+    frac_help = " ".join(['If numerous hits retained after gap filtering, consensus taxon should have at least this',
+                'fraction to be selected. Otherwise it will be set to lower level + unclassified (default 0.6)'])
     database_help = " ".join(['Database for taxonomy assignment (default GTDB).', 
                               'Only GTDB or NCBI are currently supported'])
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
@@ -593,9 +594,10 @@ def main():
     opt.add_argument("--no-low", help="Don't restrict RAM for UMAP (default)", action='store_false', default=False)
     opt.add_argument("--low", help="Reduce RAM usage by UMAP", dest='no_low', action='store_true',)
     opt.add_argument("--cluster_size", help="Minimum cluster size for HDBscan (default 500, not < 100!)", type=int, default=500)
-    opt.add_argument("--subsample", help=subsample_help, type=int, default=1000)
+    opt.add_argument("--subsample", help=subsample_help, type=int, default=500)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.5)", type=float, default=0.5)
-    opt.add_argument("--gap", help=gap_help, type=float, default=5)
+    opt.add_argument("--gap", help=gap_help, type=float, default=1)
+    opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
     opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
     opt.add_argument('--database', default='GTDB', choices=['GTDB', 'NCBI'], help=database_help)
     opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}')
@@ -641,19 +643,15 @@ def main():
     module = CL.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
-    
     #kmers counting
     print(f"Counting kmers ({args.kmer}-mers) for all samples...")
     kmer_counter(OUT=CL, INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, L=args.kmer, log=log)
-    
     #clustering with UMAP + HDBscan
     clustering_UMAP_HDBscan(OUT=CL, T=args.threads, CLUST_SIZE=args.cluster_size, EPS=args.select_epsilon,
                             SAMPLES=SAMPLES, LOW=args.no_low, RSTAT=args.random_state, log=log)
-    
     #pool clusters from samples to shared clusters and recalculate abundances
     shared_clusters(OUT=CL, FI=FI, SAMPLES=SAMPLES, RSTAT=args.random_state, 
                     SUBS=args.subsample, T=args.threads, log=log)
-    
     #spliting fasta by cluster
     fq_by_cluster(INPUT=INPDIR, subs=args.subsample, OUT=CL, T=args.threads, log=log)
     print('\nPlease, cite UMAP: https://doi.org/10.21105/joss.00861')
@@ -678,8 +676,8 @@ def main():
     module = TA.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
-    taxonomy_annotation(DB=args.database, gap=args.gap, T=args.threads, OUT=TA, FI=FI, 
-                        DBpath=args.db_path, log=log)
+    taxonomy_annotation(DB=args.database, gap=args.gap, frac=args.min_fraction,  T=args.threads, 
+                        OUT=TA, FI=FI, DBpath=args.db_path, log=log)
     if args.database == 'GTDB':
         print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
     if args.database == 'NCBI':
