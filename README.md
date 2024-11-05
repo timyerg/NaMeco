@@ -210,7 +210,8 @@ qiime tools import \
 ## Developer recommendations
 - All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs at Cluster level since Cluster IDs would not match. If needed, we recommend to merge different NaMeco runs at taxonomy level.
 - Adjust minimum cluster size according to your reads depth. Default 500 should work for most of the samples, but one don't have a lot of reads in a sample, then it should be decreased
-- If both GTDB and NCBI annotations are needed, one can run the same command 2 times, each time indicating different database, but without deleting any files. So NaMeco in second run will reuse files from the first run. At the end, each cluster will have annotations from both databases. 
+- If both GTDB and NCBI annotations are needed, one can run the same command 2 times, each time indicating different database, but without deleting any files. So NaMeco in second run will reuse files from the first run. At the end, each cluster will have annotations from both databases.
+- Using multiple threads can significantly speed up the Nameco run
 
 ## Unassigned sequences
 When I blasted unassigned sequences from different datasets I tested on the NCBI blastn, those sequences were annotated as host DNA. Somehow host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences, or blast it on the NCBI to double check. 
