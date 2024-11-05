@@ -207,6 +207,8 @@ qiime tools import \
     --output-path to_qiime2/rep-seq.qza
 ```
 
+If needed, abovementioned commands can be adapted for importing collapsed taxonomy ranks. Or just collapse your feature table with clusters in qiime2 based on the taxonomy to a desired level.
+
 ## Developer recommendations
 - All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs at Cluster level since Cluster IDs would not match. If needed, we recommend to merge different NaMeco runs at taxonomy level.
 - Adjust minimum cluster size according to your reads depth. Default 500 should work for most of the samples, but one don't have a lot of reads in a sample, then it should be decreased
