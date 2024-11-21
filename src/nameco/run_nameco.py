@@ -407,8 +407,8 @@ def taxonomy_annotation(DB, gap, frac, T, OUT, FI, DBpath, log):
     Q=f'{FI}/rep_seqs.fasta'
     DBpath = DBpath.format(OUT=OUT, DB=DB)
     queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
-    thresholds = {'Domain': 61, 'Phylum': 69, 'Class': 75,
-                  'Order': 83, 'Family': 90, 'Genus': 93, 'Species': 98}
+    thresholds = {'Domain': 65, 'Phylum': 75, 'Class': 78.5,
+                  'Order': 82, 'Family': 86.5, 'Genus': 94.5, 'Species': 98}
     taxa = pd.DataFrame(columns=['Taxon', 'Perc. id.'])
     bash(f'mkdir -p {OUT} {FI}')
     
