@@ -1,4 +1,6 @@
-*.ipynb
+README.ipynb
+NaMeco.ipynb
+tools.ipynb
 .ipynb_checkpoints/
 Old/
 dist/
