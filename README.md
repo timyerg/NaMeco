@@ -43,7 +43,7 @@ pip install nameco --upgrade
 
 Attention! The command above will only upgrade NaMeco script. If some dependencies are outdated, just delete the environment and reisnstall it.
 
-Hint: if you are stacked for a long time on "Solving envaronment step" try:
+Hint: if you are stacked for a long time on "Solving environment" step try:
 
 
 ```python
