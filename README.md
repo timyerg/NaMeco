@@ -43,6 +43,15 @@ pip install nameco --upgrade
 
 Attention! The command above will only upgrade NaMeco script. If some dependencies are outdated, just delete the environment and reisnstall it.
 
+Hint: if you are stacked for a long time on "Solving envaronment step" try:
+
+
+```python
+conda update -n base conda
+conda install -n base conda-libmamba-solver
+config --set solver libmamba
+```
+
 ## Running the pipeline
 This pipeline takes Nanopore reads as input in fastq format. It will automatically recognize .fastq, .fq extensions. Reads also can be gziped (.fastq.gz, .fq.gz)
 
