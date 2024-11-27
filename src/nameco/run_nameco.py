@@ -578,7 +578,7 @@ def main():
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
                              'Please use only databases, created by previous NaMeco run to avoid errors'])
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog='nameco')
     parser._action_groups.pop()
     req = parser.add_argument_group('required arguments')
     opt = parser.add_argument_group('optional arguments')

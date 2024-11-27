@@ -51,7 +51,7 @@ To run the pipeline, please provide the path to raw reads and adjust threads. Th
 
 
 ```python
-usage: run_nameco.py [-h] --inp_dir INP_DIR [--out_dir OUT_DIR]
+usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR]
                      [--threads THREADS] [--qc] [--no-qc] [--phred PHRED]
                      [--min_length MIN_LENGTH] [--max_length MAX_LENGTH]
                      [--kmer KMER] [--no-low] [--low]
