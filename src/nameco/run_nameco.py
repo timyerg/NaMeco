@@ -444,8 +444,7 @@ def taxonomy_annotation(DB, gap, frac, T, OUT, FI, DBpath, log):
         #get full taxonomies
         if not os.path.exists(f"{FI}/{DB}-taxonomy.tsv"):
             print('\nParsing NCBI to get full taxonomies...')
-            for cl in range(len(blast.Cluster.unique())):
-                cluster = f'Cluster_{cl}'
+            for cluster in queries:
                 bclust = blast.loc[blast.Cluster == cluster].copy()
             
                 #apply "Gap" filtering
@@ -519,8 +518,7 @@ def taxonomy_annotation(DB, gap, frac, T, OUT, FI, DBpath, log):
             mapp.Taxonomy = mapp.Taxonomy.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
                             ' '.join(x.rsplit(';', 1)[-1].replace('_', ' ').replace('  ', '__').split(' ')[:2]))
             mapping = dict(mapp[['SeqID', 'Taxonomy']].values)
-            for cl in range(len(blast.Cluster.unique())):
-                cluster = f'Cluster_{cl}'
+            for cluster in queries:
                 bclust = blast.loc[blast.Cluster == cluster].copy()
                 #apply "Gap" filtering
                 bclust = bclust.loc[bclust.bitscore > bclust.bitscore.max() - gap]
