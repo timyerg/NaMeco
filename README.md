@@ -7,26 +7,34 @@
 
 Here, we decided to merge ideas from different exsisting tools and create one pipeline ~to rule them all~ that will be able to provide taxonomy annotations at the species level and will be easy to handle. 
 
-So, Nameco will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on either GTDB or NCBI databases.
+So, Nameco will preprocess the reads, count kmers and then perform clustering with UMAP + HDBscan sample by sample. After that, form each cluster of each sample representatives will be randomly selected for additional clustering between samples to clsuter clusters. New clusters, this time already "shared" between samples, will be polished with combination of SPOA and Racon. Taxonomy will be assigned based on GTDB database.
 
 ## Dependencies 
-Linux OS with conda installed (anaconda3 or miniconda3). 
-- pandas=2.2.2
-- scikit-learn=1.4.2
-- python=3.10.8
+Linux OS with conda installed (anaconda3, miniconda3 or miniforge). 
+- qiime2 (partial)
+- q2cli
+- q2-feature-classifier
+- pandas>=0.25.3
+- xmltodict 
+- ncbi-datasets-pylib
+- rescript
+- python
 - chopper=0.7.0
+- biopython
+- matplotlib
+- blast=2.16
+- scikit-learn
+- umap-learn
 - racon=1.5.0
 - minimap2=2.28
-- umap-learn=0.5.5
-- biopython=1.83
-- matplotlib=3.8.4
-- blast=2.15
 - spoa=4.1.4
+- ipykernel
+- pip
 
 ## Installation
 During installation, new conda environment NaMeco will be created, which includes all dependencies.
 
-This pipeline can be installed with the following script:
+This pipeline can be installed with the following command:
 
 
 ```python
@@ -60,15 +68,15 @@ To run the pipeline, please provide the path to raw reads and adjust threads. Th
 
 
 ```python
-usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR]
-                     [--threads THREADS] [--qc] [--no-qc] [--phred PHRED]
-                     [--min_length MIN_LENGTH] [--max_length MAX_LENGTH]
-                     [--kmer KMER] [--no-low] [--low]
-                     [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
-                     [--select_epsilon SELECT_EPSILON] [--gap GAP]
-                     [--min_fraction MIN_FRACTION]
-                     [--random_state RANDOM_STATE] [--database {GTDB,NCBI}]
-                     [--db_path DB_PATH] [--version]
+usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR] [--threads THREADS]
+              [--qc] [--no-qc] [--phred PHRED] [--min_length MIN_LENGTH]
+              [--max_length MAX_LENGTH] [--primer_F PRIMER_F]
+              [--primer_R PRIMER_R] [--primer_PI PRIMER_PI] [--kmer KMER]
+              [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
+              [--select_epsilon SELECT_EPSILON] [--db_type DB_TYPE]
+              [--gap GAP] [--min_fraction MIN_FRACTION] [--mask_taxa]
+              [--no_masking] [--random_state RANDOM_STATE]
+              [--n_polish N_POLISH] [--db_path DB_PATH] [--version]
 
 required arguments:
   --inp_dir INP_DIR     Path to the folder with reads, absolute or relative.
@@ -82,36 +90,41 @@ optional arguments:
   --threads THREADS     The number of threads/cpus (default 2)
   --qc                  Run chopper for quality control (default)
   --no-qc               Skip chopper for quality control
-  --phred PHRED         Minimum phred average score for chopper (default 8)
+  --phred PHRED         Minimum phred score for chopper (default 10)
   --min_length MIN_LENGTH
                         Minimum read length for chopper (default 1300)
   --max_length MAX_LENGTH
                         Maximum read length for chopper (default 1700)
+  --primer_F PRIMER_F   Forward primer (default AGAGTTTGATCMTGGCTCAG)
+  --primer_R PRIMER_R   Reverse primer (default CGGTTACCTTGTTACGACTT)
+  --primer_PI PRIMER_PI
+                        Percent identity for primers (default 0.6)
   --kmer KMER           K-mer length for clustering (default 5)
-  --no-low              Don't restrict RAM for UMAP (default)
-  --low                 Reduce RAM usage by UMAP
   --cluster_size CLUSTER_SIZE
-                        Minimum cluster size for HDBscan (default 500, not <
-                        100!)
+                        Min. unique cluster size (default 10, can't be < 10)
   --subsample SUBSAMPLE
-                        Subsample bigger than that threshold clusters for
-                        consensus creation and polishing by Racon (default
-                        500)
+                        Subsample clusters for consensus creation and
+                        polishing (default 200)
   --select_epsilon SELECT_EPSILON
                         Selection epsilon for clusters (default 0.5)
+  --db_type DB_TYPE     Use all rRNAs from GTDB ("All", higher accuracy,
+                        slower) or only representative species ("SpeciesReps",
+                        lower accuracy, faster) (default "All")
   --gap GAP             Gap between the bit score of the best hit and others,
                         that are considered with the top hit for taxonomy
                         selection (default 1)
   --min_fraction MIN_FRACTION
                         If numerous hits retained after gap filtering,
                         consensus taxon should have at least this fraction to
-                        be selected. Otherwise it will be set to lower level +
+                        be selected. Otherwise set as lower level +
                         unclassified (default 0.6)
+  --mask_taxa           Mask taxonomy ranks based on percent identity
+                        thresholds (default "True"). Thresholds are: d: 65, p:
+                        75, c: 78.5,o: 82, f: 86.5, g: 94.5, s: 97
+  --no_masking          Skip masking taxonomy step
   --random_state RANDOM_STATE
-                        Random state for subsampling (default 42)
-  --database {GTDB,NCBI}
-                        Database for taxonomy assignment (default GTDB). Only
-                        GTDB or NCBI are currently supported
+                        Random state for subsampling (default 888)
+  --n_polish N_POLISH   Number of polishing rounds (default 3)
   --db_path DB_PATH     Path to store/existing database (default
                         $out_dir/$database). Please use only databases,
                         created by previous NaMeco run to avoid errors
@@ -138,22 +151,21 @@ Several folders will be produced:
 It is the main output of the pipeline.
 - cluster_counts.tsv - tab-separated table, cluster IDs and absolute counts across all samples.
 - rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA, two rounds of Racon and one of Medaka)
-- DB-taxonomy.tsv - tab-separated table, cluster IDs and taxonomy annotations (ranks by columns), read length and percent identity from blast.
-- DB-taxonomy-q2.tsv - same as above, but in Qiime2 format (all ranks pooled, separated by ";" and prefixed with "r__", where r is the first character of the rank). It can be imported to qiime2.
-- DB-taxonomy-rank.tsv - collapsed to corresponding rank taxonomies with counts.
+- Taxonomy.tsv - tab-separated table, cluster IDs and taxonomy annotations (ranks by columns), read length and percent identity from blast.
+- Taxonomy-q2.tsv - same as above, but in Qiime2 format (all ranks pooled, separated by ";" and prefixed with "r__", where r is the first character of the rank). It can be imported to qiime2.
+- rank.tsv - collapsed to corresponding rank taxonomies with counts.
 
 ### Quality_control
 - Chopper - contains reads after QC with Chopper.
+- Fastas - fasta files after primer-specific read extraction with RESCRIPt
 
 ### Clustering
 - Folders with sample names:
   - clusters.tsv - a table with sequence IDs and assigned clusters for given sample
-  - clusters.png - scatterplot of clusters for given sample
   - kmers.tsv - a table with kmer counts for each sequence for given sample
   - subsampled_ids.tsv - sequences with kmers counts, randomly selected for "between samples" clustering
 - Clusters_subsampled - directory with "between samples" subsampled fastq files, consensus sequences and IDs of subsampled representatives
 - shared_clusters.tsv - selected features from each cluster and each sample, clustered "between samples"
-- clusters.png - scatterplot of clusters "between samples"
 - consensus_pooled.fa - fasta file with consensus sequences (SPOA) of each "between samples" cluster
 - pooled.fq - pooled fastq file of all samples
   
@@ -164,10 +176,8 @@ Contains fasta files with "best" read for each cluster, polished by Racon.
 These reads are merged into one fasta file in the "Final_output" folder.
 
 ### Taxonomy_annotation
-- GTDB/NCBI - folder with GTDB/NCBI 16S database
-- DB-blastn.tsv - output from blastn run with
-
-For NCBI database, full taxonomies are parsed from the NCBI website based on taxid. Final taxonomy tables are stored in the "Final_output" folder.
+- GTDB - folder with GTDB SSU (16S rRNA gene) database
+- blastn.tsv - output from blastn run with
 
 ### Logs
 Log files for steps that produce logs worth reading.
@@ -176,17 +186,13 @@ Log files for steps that produce logs worth reading.
 Files from NaMeco "Final_output" folder may be used for all kind of analyses in R or Python, but also may be imported to Qiime2 for downstream analyses:
 - cluster_counts.tsv - to table.qza as feature table with frequencies (absolute counts)
 - rep_seqs.fasta - to rep-seq.qza as representative sequences 
-- DB-taxonomy-q2.tsv - to taxonomy.qza file
+- Taxonomy-q2.tsv - to taxonomy.qza file
 
 Example commands are listed below:
 
 
 ```python
-#deactivate NaMeco (if activated)
-conda deactivate
-
-#activate qiime2 env (https://docs.qiime2.org/2024.5/install/native/)
-conda activate qiime2-amplicon-2024.5
+#can be done in your qiime2 env. or in NaMeco
 
 mkdir to_qiime2
 
@@ -206,7 +212,7 @@ qiime tools import \
 #import taxonomy
 qiime tools import \
     --type 'FeatureData[Taxonomy]' \
-    --input-path NaMeco_out/Final_output/GTDB-taxonomy-q2.tsv \
+    --input-path NaMeco_out/Final_output/Taxonomy-q2.tsv \
     --output-path to_qiime2/taxonomy.qza
 
 #import representative sequences
@@ -220,17 +226,14 @@ If needed, abovementioned commands can be adapted for importing collapsed taxono
 
 ## Developer recommendations
 - All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs at Cluster level since Cluster IDs would not match. If needed, we recommend to merge different NaMeco runs at taxonomy level.
-- Adjust minimum cluster size according to your reads depth. Default 500 should work for most of the samples, but one don't have a lot of reads in a sample, then it should be decreased
-- If both GTDB and NCBI annotations are needed, one can run the same command 2 times, each time indicating different database, but without deleting any files. So NaMeco in second run will reuse files from the first run. At the end, each cluster will have annotations from both databases.
-- Using multiple threads can significantly speed up the Nameco run
+- Using multiple threads can significantly speed up the NaMeco run
 
 ## Unassigned sequences
-When I blasted unassigned sequences from different datasets I tested on the NCBI blastn, those sequences were annotated as host DNA. Somehow host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences, or blast it on the NCBI to double check. 
+- When I blasted unassigned sequences from different datasets I tested on the NCBI blastn, those sequences were annotated as host DNA. Somehow host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences, or blast it on the NCBI to double check.
 
 ## Errors
 
-- Error with "FullID": that means that you have at least one sample with low amount of reads. Try to decrease minimum cluster size or remove the sample with low amount of reads.
-- TypeError("cannot pickle '_io.BufferedReader' object") with NCBI database: some issues with the NCBI website, relaunch later - it will start from the parsing step.
+- Give the feedback when encountered by creating an issue.
 
 ## Citation
 If you used NaMeco tool, please cite our paper: (will be added later)
