@@ -106,7 +106,7 @@ optional arguments:
                         Subsample clusters for consensus creation and
                         polishing (default 200)
   --select_epsilon SELECT_EPSILON
-                        Selection epsilon for clusters (default 0.5)
+                        Selection epsilon for clusters (default 0.1)
   --db_type DB_TYPE     Use all rRNAs from GTDB ("All", higher accuracy,
                         slower) or only representative species ("SpeciesReps",
                         lower accuracy, faster) (default "All")

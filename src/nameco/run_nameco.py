@@ -240,7 +240,7 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
             if len(shar) > 0:
                 shar = shar.groupby('Cluster').size().reset_index(name='counts')
                 shar = shar.sort_values('counts', ascending=False).reset_index()
-                if shar.loc[0, 'counts'] >= 5:
+                if shar.loc[0, 'counts'] >= 4:
                     clust_dict[shar.loc[0, 'Cluster']] += uniq.index.tolist()
                     counts.loc[shar.loc[0, 'Cluster'], sample] += len(uniq)
                     continue
@@ -498,7 +498,7 @@ def main():
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--cluster_size", help="Min. unique cluster size (default 10, can't be < 10)", type=int, default=10)
     opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 200)', type=int, default=200)
-    opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.5)", type=float, default=0.5)
+    opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
     opt.add_argument('--db_type', help=db_type_help, default='All')
     opt.add_argument("--gap", help=gap_help, type=float, default=1)
     opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
