@@ -150,7 +150,7 @@ Several folders will be produced:
 
 It is the main output of the pipeline.
 - cluster_counts.tsv - tab-separated table, cluster IDs and absolute counts across all samples.
-- rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA, two rounds of Racon and one of Medaka)
+- rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA, two rounds of Racon)
 - Taxonomy.tsv - tab-separated table, cluster IDs and taxonomy annotations (ranks by columns), read length and percent identity from blast.
 - Taxonomy-q2.tsv - same as above, but in Qiime2 format (all ranks pooled, separated by ";" and prefixed with "r__", where r is the first character of the rank). It can be imported to qiime2.
 - rank.tsv - collapsed to corresponding rank taxonomies with counts.

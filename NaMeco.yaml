@@ -1,4 +1,4 @@
-name: NaMecoNew
+name: NaMeco
 channels:
 - conda-forge
 - bioconda
