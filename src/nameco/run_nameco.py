@@ -196,8 +196,8 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
         clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
         for cid in clusters.Cluster.unique():
             sub = clusters.loc[clusters.Cluster == cid].copy()
-            if len(sub) > 10:
-                sub = sub.sample(n=10, random_state=RSTAT)
+            if len(sub) > 100:
+                sub = sub.sample(n=100, random_state=RSTAT)
             data.loc[sub.Feature.tolist(),'FullID'] = sample+'___'+cid+'___'
         data = data[data['FullID'].notna()]
         data.FullID = data.FullID + data.index.astype(str)
@@ -234,13 +234,15 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
     i = len(clust_dict)-1
     for sample in SAMPLES:
         unique = pd.read_csv(f'{OUT}/{sample}/clusters.tsv', sep='\t', index_col=0)
+        subunique = pd.read_csv(f'{OUT}/{sample}/subsampled_ids.tsv', sep='\t', index_col=0)
         for uclust in unique.Cluster.unique():
             uniq = unique.loc[unique.Cluster == uclust]
+            subsize = len(subunique.loc[subunique.index == uclust]) 
             shar = shared.loc[shared.index.str.contains(f"{sample}___{uclust}___")]
             if len(shar) > 0:
                 shar = shar.groupby('Cluster').size().reset_index(name='counts')
                 shar = shar.sort_values('counts', ascending=False).reset_index()
-                if shar.loc[0, 'counts'] >= 4:
+                if shar.loc[0, 'counts'] >= subsize/2:
                     clust_dict[shar.loc[0, 'Cluster']] += uniq.index.tolist()
                     counts.loc[shar.loc[0, 'Cluster'], sample] += len(uniq)
                     continue
@@ -374,13 +376,13 @@ def top_hit(bclust, taxa, frac):
     else:
         taxon, pind = bclust.Taxon.iloc[0], bclust.pind.iloc[0]
         if len(bclust.loc[bclust.Taxa_counts==bclust.Taxa_counts.max()])/len(bclust) < frac:
-            taxon = taxon.rsplit(';',1)[0] + taxon.rsplit(';',1)[-1].split(' ')[0] + ' unclassified'
+            taxon = taxon.rsplit(';',1)[0] +';'+ taxon.rsplit(';',1)[-1].split(' ')[0] + ' unclassified'
     return taxon, pind
 
-def taxonomy_annotation(DB, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac, T, OUT, FI, DBpath, log):
+def taxonomy_annotation(DB, DBV, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac, T, OUT, FI, DBpath, log):
     print(f'Starting taxonomy annotations with blastn against {DB}...')
     Q=f'{FI}/rep_seqs.fasta'
-    DBpath = DBpath.format(OUT=OUT, DB=DB, db_type=DB_type)
+    DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB, db_type=DB_type)
     queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
     thresholds = {'Domain': 65, 'Phylum': 75, 'Class': 78.5,
                   'Order': 82, 'Family': 86.5, 'Genus': 94.5, 'Species': 97}
@@ -392,7 +394,7 @@ def taxonomy_annotation(DB, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac, T, O
         print(f'Creating database...')
         bash(f'mkdir -p {DBpath}')
         bash(f"qiime rescript get-gtdb-data --p-db-type '{DB_type}' --o-gtdb-taxonomy {DBpath}/taxa.qza \
-             --o-gtdb-sequences {DBpath}/seqs.qza 2>> {log}")
+             --p-version {DBV} --o-gtdb-sequences {DBpath}/seqs.qza 2>> {log}")
         bash(f"qiime tools export --input-path {DBpath}/seqs.qza --output-path {DBpath} 2>> {log}")
         bash(f"qiime tools export --input-path {DBpath}/taxa.qza --output-path {DBpath} 2>> {log}")
         bash(f'makeblastdb -in {DBpath}/dna-sequences.fasta -parse_seqids -dbtype "nucl"')
@@ -404,7 +406,7 @@ def taxonomy_annotation(DB, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac, T, O
     #annotate
     if not os.path.exists(f"{OUT}/blastn.tsv"):
         print(f'\nAssigning taxonomy...')
-        bash(f'blastn -query {Q} -db {DBpath}/dna-sequences.fasta -task blastn \
+        bash(f'blastn -query {Q} -db {DBpath}/dna-sequences.fasta -task blastn -qcov_hsp_perc 80 \
                -num_threads {T} -out {OUT}/blastn.tsv -max_target_seqs 50 -max_hsps 50 \
                -outfmt "6 qseqid sseqid evalue length pident nident bitscore score gaps" 2>> {log}')
     else:
@@ -475,6 +477,8 @@ def main():
                           'fraction to be selected. Otherwise set as lower level + unclassified (default 0.6)'])
     db_type_help = " ".join(['Use all rRNAs from GTDB ("All", higher accuracy, slower) or only',
                              'representative species ("SpeciesReps", lower accuracy, faster) (default "All")'])
+    db_version_help = " ".join(['GTDB version. Choices: "202.0", "207.0", "214.0", "214.1", "220.0",',
+                             '"226.0" (default "226.0")'])
     mask_taxa_help = " ".join(['Mask taxonomy ranks based on percent identity thresholds (default "True").',
                                'Thresholds are: d: 65, p: 75, c: 78.5,o: 82, f: 86.5, g: 94.5, s: 97'])
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
@@ -500,13 +504,14 @@ def main():
     opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 200)', type=int, default=200)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
     opt.add_argument('--db_type', help=db_type_help, default='All')
+    opt.add_argument('--db_version', help=db_version_help, default='226.0')
     opt.add_argument("--gap", help=gap_help, type=float, default=1)
     opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
     opt.add_argument("--mask_taxa", help=mask_taxa_help, action='store_true', default=True)
     opt.add_argument("--no_masking", help="Skip masking taxonomy step", dest='mask_taxa', action='store_false')
     opt.add_argument("--random_state", help="Random state for subsampling (default 888)", type=int, default=888)
     opt.add_argument("--n_polish", help="Number of polishing rounds (default 3)", type=int, default=3)
-    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}/{db_type}')
+    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}-{DBV}/{db_type}')
     opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
     args = parser.parse_args()
     
@@ -577,9 +582,10 @@ def main():
     module = TA.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
-    taxonomy_annotation(DB='GTDB', DB_type=args.db_type, FWD=args.primer_F, RVS=args.primer_R, log=log,
-                        MINL=args.min_length, MAXL=args.max_length, gap=args.gap, frac=args.min_fraction,
-                        T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, MASK=args.mask_taxa)
+    taxonomy_annotation(DB='GTDB', DB_type=args.db_type, FWD=args.primer_F, RVS=args.primer_R, 
+                        DBV=args.db_version, MINL=args.min_length, MAXL=args.max_length, gap=args.gap,
+                        frac=args.min_fraction, T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, 
+                        MASK=args.mask_taxa, log=log)
     print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
     print('Please, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
     print(f"\nEnd of the {module.replace('_', ' ')} module")

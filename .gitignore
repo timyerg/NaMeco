@@ -4,3 +4,4 @@ tools.ipynb
 .ipynb_checkpoints/
 Old/
 dist/
+tests/
