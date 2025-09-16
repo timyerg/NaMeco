@@ -13,10 +13,13 @@ So, Nameco will preprocess the reads, count kmers and then perform clustering wi
 Linux OS with conda installed (anaconda3, miniconda3 or miniforge). 
 - qiime2 (partial)
 - q2cli
+- q2templates
+- q2-types
+- q2-longitudinal
 - q2-feature-classifier
 - pandas>=0.25.3
 - xmltodict 
-- ncbi-datasets-pylib
+- ncbi-datasets-pyclient=18.4.0
 - rescript
 - python
 - chopper=0.7.0
@@ -24,12 +27,14 @@ Linux OS with conda installed (anaconda3, miniconda3 or miniforge).
 - matplotlib
 - blast=2.16
 - scikit-learn
-- umap-learn
+- umap-learn=0.5.7
 - racon=1.5.0
 - minimap2=2.28
 - spoa=4.1.4
 - ipykernel
 - pip
+- pip:
+    - nameco
 
 ## Installation
 During installation, new conda environment NaMeco will be created, which includes all dependencies.
@@ -74,9 +79,10 @@ usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR] [--threads THREADS]
               [--primer_R PRIMER_R] [--primer_PI PRIMER_PI] [--kmer KMER]
               [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
               [--select_epsilon SELECT_EPSILON] [--db_type DB_TYPE]
-              [--gap GAP] [--min_fraction MIN_FRACTION] [--mask_taxa]
-              [--no_masking] [--random_state RANDOM_STATE]
-              [--n_polish N_POLISH] [--db_path DB_PATH] [--version]
+              [--db_version DB_VERSION] [--gap GAP]
+              [--min_fraction MIN_FRACTION] [--mask_taxa] [--no_masking]
+              [--random_state RANDOM_STATE] [--n_polish N_POLISH]
+              [--db_path DB_PATH] [--version]
 
 required arguments:
   --inp_dir INP_DIR     Path to the folder with reads, absolute or relative.
@@ -110,6 +116,9 @@ optional arguments:
   --db_type DB_TYPE     Use all rRNAs from GTDB ("All", higher accuracy,
                         slower) or only representative species ("SpeciesReps",
                         lower accuracy, faster) (default "All")
+  --db_version DB_VERSION
+                        GTDB version. Choices: "202.0", "207.0", "214.0",
+                        "214.1", "220.0", "226.0" (default "226.0")
   --gap GAP             Gap between the bit score of the best hit and others,
                         that are considered with the top hit for taxonomy
                         selection (default 1)
@@ -150,7 +159,7 @@ Several folders will be produced:
 
 It is the main output of the pipeline.
 - cluster_counts.tsv - tab-separated table, cluster IDs and absolute counts across all samples.
-- rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA, two rounds of Racon)
+- rep_seqs.fasta - representative sequences for each cluster, corrected by "polishing" (SPOA and Racon)
 - Taxonomy.tsv - tab-separated table, cluster IDs and taxonomy annotations (ranks by columns), read length and percent identity from blast.
 - Taxonomy-q2.tsv - same as above, but in Qiime2 format (all ranks pooled, separated by ";" and prefixed with "r__", where r is the first character of the rank). It can be imported to qiime2.
 - rank.tsv - collapsed to corresponding rank taxonomies with counts.
@@ -227,6 +236,8 @@ If needed, abovementioned commands can be adapted for importing collapsed taxono
 ## Developer recommendations
 - All samples that are compared to each other should be run together in one pool, even from different sequencing runs. Do not merge different NaMeco runs at Cluster level since Cluster IDs would not match. If needed, we recommend to merge different NaMeco runs at taxonomy level.
 - Using multiple threads can significantly speed up the NaMeco run
+- If you are facing issues with the drive space on your working drive, export tmp directory before running NaMeco: "export TMPDIR=/big_storage_path/TMP"
+- "Creating database" can take a long time, just wait until it is done. Good time to make some coffee!
 
 ## Unassigned sequences
 - When I blasted unassigned sequences from different datasets I tested on the NCBI blastn, those sequences were annotated as host DNA. Somehow host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences, or blast it on the NCBI to double check.
