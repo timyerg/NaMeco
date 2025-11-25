@@ -26,6 +26,7 @@ dependencies:
 - minimap2=2.28
 - spoa=4.1.4
 - ipykernel
+- pigz
 - pip
 - pip:
     - nameco
