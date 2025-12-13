@@ -41,9 +41,8 @@ def greetings():
 #                                                    #
 ######################################################
 
-Written by Timur Yergaliyev
 Powered by Coffee
-If you used this pipeline, please cite our paper: XXX
+If you used this pipeline, please cite our paper: https://doi.org/10.1186/s12864-025-12415-x
 Also, don't forget to cite the tools that were used in this pipeline
     """
     print(grt)

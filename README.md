@@ -32,6 +32,7 @@ Linux OS with conda installed (anaconda3, miniconda3 or miniforge).
 - minimap2=2.28
 - spoa=4.1.4
 - ipykernel
+- pigz
 - pip
 - pip:
     - nameco
@@ -247,4 +248,11 @@ If needed, abovementioned commands can be adapted for importing collapsed taxono
 - Give the feedback when encountered by creating an issue.
 
 ## Citation
-If you used NaMeco tool, please cite our paper: (will be added later)
+If you used NaMeco tool, please cite our paper:
+
+
+```python
+Yergaliyev, T., Rios-Galicia, B. & Camarinha-Silva, A. 
+NaMeco - Nanopore full-length 16S rRNA gene reads clustering and annotation. 
+BMC Genomics (2025). https://doi.org/10.1186/s12864-025-12415-x
+```
