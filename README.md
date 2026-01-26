@@ -67,7 +67,7 @@ config --set solver libmamba
 ```
 
 ## Data preparation
-Nanopore sequencers often output samples as multiple small-sized fastq files for each barcodes. NaMeco accepts ONE fastq file as ONE sample, so please concatenate multiple files that belong to the same sample before Nameco. For example, if you have a folder named "barcode01", and which contains multiple fastq.gz files that belong to Sample1, you can use the followin command: 
+Nanopore sequencers often output samples as multiple small-sized fastq files for each barcode. NaMeco accepts ONE fastq file as ONE sample, so please concatenate multiple files that belong to the same sample before running NaMeco. For example, if you have a folder named "barcode01",  which contains multiple fastq.gz files that belong to Sample1, you can use the following command: 
 
 
 ```python
