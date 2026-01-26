@@ -66,6 +66,16 @@ conda install -n base conda-libmamba-solver
 config --set solver libmamba
 ```
 
+## Data preparation
+Nanopore sequencers often output samples as multiple small-sized fastq files for each barcodes. NaMeco accepts ONE fastq file as ONE sample, so please concatenate multiple files that belong to the same sample before Nameco. For example, if you have a folder named "barcode01", and which contains multiple fastq.gz files that belong to Sample1, you can use the followin command: 
+
+
+```python
+cat barcode01/*fastq.gz > Sample1.fastq.gz
+```
+
+You can iterate through all your samples in the loop. But make sure that you are not concatenating files that belong to different samples.
+
 ## Running the pipeline
 This pipeline takes Nanopore reads as input in fastq format. It will automatically recognize .fastq, .fq extensions. Reads also can be gziped (.fastq.gz, .fq.gz)
 
@@ -245,6 +255,7 @@ If needed, abovementioned commands can be adapted for importing collapsed taxono
 
 ## Errors
 
+- "KeyError: 'FullID'". To fix this error, delete samples with very low read counts.
 - Give the feedback when encountered by creating an issue.
 
 ## Citation
