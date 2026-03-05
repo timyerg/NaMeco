@@ -83,38 +83,20 @@ def chopper(INPUT, SAMPLES, T, Q, MINL, MAXL, OUT, LOGS, log):
         bash(f'{pre} chopper -q {Q} -l {MINL} --maxlength {MAXL} -t {T} 2>> {log} | gzip > {fq_out}')
         bash(f'echo "{sample} done. Enjoy" >> {log}')
 
-
-#Function to extract reads by primers
-def extract_reads(INPUT, SAMPLES, T, FWD, RVS, PI, MINL, MAXL, OUT, LOGS, log):
-    print('\nExtracting reads with RESCRIPt...')
-    skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}.fasta')
-    if all(checks):
-        return print(f'Reads from all samples were already extracted. Skipping')
-        
-    print('Copy and unzip...')
-    bash(f'mkdir -p {OUT} {LOGS}')
-    bash(f'cp {INPUT}/*.f*q* {OUT}/')
-    bash(f'pigz -d {OUT}/*.f*q*')
-    
-    print('Converting to fasta and importing to Qiime2...')
-    for s in SAMPLES:
-        sample = glob.glob(f"{OUT}/{s}.f*q*")[0]
-        SeqIO.convert(f'{sample}','fastq',f'{OUT}/{s}.fa','fasta')
-        bash(f'rm {sample}')
-        bash(f"qiime tools import --type 'FeatureData[Sequence]' --input-path {OUT}/{s}.fa \
-             --output-path {OUT}/{s}.qza 2>> {log}")
-        bash(f'rm {OUT}/{s}.fa')
-        
-    print('Extracting reads...')
-    for s in SAMPLES:
-        bash(f"qiime feature-classifier extract-reads --i-sequences {OUT}/{s}.qza \
-             --p-f-primer {FWD} --p-r-primer {RVS} --p-read-orientation 'both' \
-             --o-reads {OUT}/{s}-extr.qza --p-min-length {MINL} --p-max-length {MAXL} \
-             --p-identity {PI} --p-n-jobs {T} 2>> {log}")
-        bash(f"qiime tools export --input-path {OUT}/{s}-extr.qza --output-path {OUT}")
-        bash(f'mv {OUT}/dna-sequences.fasta {OUT}/{s}.fasta')
-        bash(f'rm {OUT}/{s}.qza {OUT}/{s}-extr.qza')
-        bash(f'echo "{sample} done. Enjoy" >> {log}')
+#Function to find samples with too low counts
+def min_sample_size(INPUT, SAMPLES, LOGS, MinSS, log):
+    print(f'\nSamples with sample size after QC less than {MinSS} reads will be ignored')
+    bash(f'echo "\n##### Checking sample sizes after QC #####\n" >> {log}')
+    LOWS = []
+    bash(f'mkdir -p {LOGS}')
+    for sample in SAMPLES:
+        fq = glob.glob(f"{INPUT}/{sample}.f*q*")[0]
+        ss = int(bash(f'zcat {fq}|wc -l'))/4 if fq.endswith('gz') else int(bash(f'cat {fq}|wc -l'))/4
+        if ss < MinSS:
+            bash(f'echo "{sample} with {int(ss)} reads will be ignored" >> {log}')
+            LOWS.append(sample)
+            print(f'{sample} with {int(ss)} reads will be ignored. If needed, adjust "--min_sample_size"')
+    return LOWS
 
 
 #Functions to count kmers of given length. 
@@ -136,7 +118,7 @@ def kmer_writer(q, out, kmers):
             tab.flush()
 
 #Function to count kmers by sample
-def kmer_counter(OUT, INPUT, SAMPLES, L, T, log, ext, fmt):    
+def kmer_counter(OUT, INPUT, SAMPLES, L, T, log):    
     skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}/kmers.tsv')
     if all(checks):
         return print(f'Kmers were already counted. Skipping')
@@ -145,19 +127,21 @@ def kmer_counter(OUT, INPUT, SAMPLES, L, T, log, ext, fmt):
     kmers = product(nucleotides, repeat=L)
     kmers = [''.join(c) for c in kmers]
     for sample in SAMPLES:
-        file = glob.glob(f"{INPUT}/{sample}.{ext}")[0]
+        file = glob.glob(f"{INPUT}/{sample}.f*q*")[0]
         out = f'{OUT}/{sample}'
         bash(f'mkdir -p {out}')
         if os.path.exists(f'{out}/kmers.tsv') and sample in skip:
             continue
+        #must use Manager queue here, or will not work
         q = mp.Manager().Queue()  
         pool = mp.Pool(T)
+        #put listener to work first
         watcher = pool.apply_async(kmer_writer, (q, out, kmers))
+        #fire off workers
         bash(f'echo "\n##### Processing {sample} #####\n" >> {log}')
         jobs = []
-        open_f = gzip.open if file.endswith('gz') else open
-        with open_f(file, 'rt') as f:
-            for rec in SeqIO.parse(f, fmt):
+        with gzip.open(file, 'rt') as f:
+            for rec in SeqIO.parse(f, 'fastq'):
                 job = pool.apply_async(kmer_subcounter, (kmers, rec, q))
                 jobs.append(job)
         [job.get() for job in jobs]
@@ -189,7 +173,7 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
         data = pd.read_csv(f'{OUT}/{sample}/kmers.tsv', sep='\t', index_col=0)
         size = max([CLUST_UQ, 10])
         clust_emb = umap.UMAP(n_jobs=T, metric='braycurtis', min_dist=0, n_components=10).fit_transform(data.values)
-        labels = cluster.HDBSCAN(min_cluster_size=size, n_jobs=T, cluster_selection_epsilon=EPS).fit_predict(clust_emb)
+        labels = cluster.HDBSCAN(min_cluster_size=size, n_jobs=T, cluster_selection_epsilon=EPS,copy=False).fit_predict(clust_emb)
         clusters = pd.DataFrame({'Feature': data.index, 'Cluster': labels})
         clusters = clusters.loc[clusters.Cluster >= 0]
         clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
@@ -212,7 +196,7 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
     dfs = [df.apply(pd.to_numeric, downcast='integer') for df in dfs]
     data = pd.concat(dfs)
     clust_emb = umap.UMAP(n_jobs=T, metric='braycurtis',  min_dist=0, n_components=10).fit_transform(data.values)
-    labels = cluster.HDBSCAN(min_cluster_size=8, n_jobs=T, cluster_selection_epsilon=EPS,).fit_predict(clust_emb)
+    labels = cluster.HDBSCAN(min_cluster_size=8, n_jobs=T, cluster_selection_epsilon=EPS,copy=False).fit_predict(clust_emb)
     clusters = pd.DataFrame({'Feature': data.index, 'Cluster': labels})
     clusters = clusters.loc[clusters.Cluster >= 0]
     clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
@@ -272,12 +256,13 @@ def shared_clusters(OUT, FI, SAMPLES, RSTAT, SUBS, T, log):
 #Functions to split sample files by clusters and finding consensus for each cluster
 #working function
 def file_splitter(out, cluster, log):
-    f = f'{out}/{cluster}.fa'
-    file = f"{out}/../pooled.fa"
-    bash(f"grep -f {out}/{cluster}.txt -F -A 3 {file} | grep -v '^--$' > {f}")
-    consensus = bash(f"spoa {f}")
+    fq = f'{out}/{cluster}.fq'
+    fastq = f"{out}/../pooled.fq"
+    bash(f"zgrep -f {out}/{cluster}.txt -F -A 3 {fastq} | grep -v '^--$' > {fq}")
+    consensus = bash(f"spoa {fq}")
     with open(f'{out}/{cluster}_consensus.fa', 'wt') as cons:
         cons.write(">{}\n{}\n".format(cluster, str(consensus).split('\\n')[1]))
+    bash(f'gzip -f {fq}')
     bash(f'echo "{cluster} done. Enjoy" >> {log}')
        
 def file_by_cluster(INPUT, subs, OUT, T, log):
@@ -292,13 +277,20 @@ def file_by_cluster(INPUT, subs, OUT, T, log):
     #pool
     print('\nCreating files for subsampled clusters...')
     print(f'Big clusters will be subsampled to {subs} reads!')
-    big = f"{OUT}/pooled.fa"
+    big = f"{OUT}/pooled.fq"
     if not os.path.exists(big):
-        bash(f'cat {INPUT}/*.fasta > {big}')
+        inp = glob.glob(f"{INPUT}/*.f*q*")
+        if inp[0].endswith('.gz'):
+            big = f"{OUT}/pooled.fq.gz"
+        bash(f'cat {" ".join(inp)} > {big}')
+        if big.endswith('.gz'):
+            bash(f'gunzip {big}')
+    #must use Manager queue here, or will not work
     pool = mp.Pool(T)
+    #fire off workers
     jobs = []
     for cluster in clusters:
-        if os.path.exists(f'{out}/{cluster}.fa') and os.path.exists(f'{out}/{cluster}_consensus.fa'):
+        if os.path.exists(f'{out}/{cluster}.fq') and os.path.exists(f'{out}/{cluster}_consensus.fa'):
             continue
         job = pool.apply_async(file_splitter, (out, cluster, log))
         jobs.append(job)
@@ -328,7 +320,7 @@ def read_correction(T, N, OUT, FI, log):
             continue
         fa = f'{OUT}/../Clustering/Clusters_subsampled/{cluster}_consensus.fa'
         sam = f"{OUT}/{cluster}.sam"
-        f = f'{OUT}/../Clustering/Clusters_subsampled/{cluster}.fa'
+        fq = f'{OUT}/../Clustering/Clusters_subsampled/{cluster}.fq.gz'
         bash(f'echo "\n##### Processing {cluster} #####" >> {log}')
         for n in range(N):
             po = f"{OUT}/{cluster}_racon{n}.fa"
@@ -337,10 +329,10 @@ def read_correction(T, N, OUT, FI, log):
                 ta = fa
             #overlaping with minimap2
             bash(f'echo "\nMapping {cluster} {n}" >> {log}')
-            bash(f"minimap2 -ax map-ont -t {T} {ta} {f} -o {sam} 2>> {log}")
+            bash(f"minimap2 -ax map-ont -t {T} {ta} {fq} -o {sam} 2>> {log}")
             #polishing with racon
             bash(f'echo "\nPolishing with Racon {cluster}" >> {log}')
-            bash(f'racon -m 8 -x -6 -g -8 -t {T} {f} {sam} {ta} > {po} 2>> {log}')
+            bash(f'racon -m 8 -x -6 -g -8 -t {T} {fq} {sam} {ta} > {po} 2>> {log}')
             bash(f'rm {sam}')   
     #collect corrected sequences
     with open(corr, "w") as corrected:
@@ -378,10 +370,10 @@ def top_hit(bclust, taxa, frac):
             taxon = taxon.rsplit(';',1)[0] +';'+ taxon.rsplit(';',1)[-1].split(' ')[0] + ' unclassified'
     return taxon, pind
 
-def taxonomy_annotation(DB, DBV, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac, T, OUT, FI, DBpath, log):
+def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
     print(f'Starting taxonomy annotations with blastn against {DB}...')
     Q=f'{FI}/rep_seqs.fasta'
-    DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB, db_type=DB_type)
+    DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB)
     queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
     thresholds = {'Domain': 65, 'Phylum': 75, 'Class': 78.5,
                   'Order': 82, 'Family': 86.5, 'Genus': 94.5, 'Species': 97}
@@ -389,15 +381,26 @@ def taxonomy_annotation(DB, DBV, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac,
     bash(f'mkdir -p {OUT} {FI}')
     
     #create DB
-    if not os.path.exists(f"{DBpath}/dna-sequences.fasta.ndb"):
+    if not os.path.exists(f"{DBpath}/ssu_all.fna.ndb"):
         print(f'Creating database...')
+        substr = DBV if DBV == 'latest' else f"release{DBV.split('.')[0]}/{DBV}"
+        suffix = "ssu_all" if DBV == 'latest' else f"ssu_all_r{DBV.split('.')[0]}"
+        seq = f"https://data.ace.uq.edu.au/public/gtdb/data/releases/{substr}/genomic_files_all/{suffix}.fna.gz"
         bash(f'mkdir -p {DBpath}')
-        bash(f"qiime rescript get-gtdb-data --p-db-type '{DB_type}' --o-gtdb-taxonomy {DBpath}/taxa.qza \
-             --p-version {DBV} --o-gtdb-sequences {DBpath}/seqs.qza 2>> {log}")
-        bash(f"qiime tools export --input-path {DBpath}/seqs.qza --output-path {DBpath} 2>> {log}")
-        bash(f"qiime tools export --input-path {DBpath}/taxa.qza --output-path {DBpath} 2>> {log}")
-        bash(f'makeblastdb -in {DBpath}/dna-sequences.fasta -parse_seqids -dbtype "nucl"')
-        bash(f'rm {DBpath}/dna-sequences.fasta')
+        bash(f'wget -P {DBpath} {seq} 2>> {log}')
+        if not os.path.exists(f"{DBpath}/ssu_all.fna.gz"):
+            bash(f'mv {DBpath}/ssu_all*.fna.gz {DBpath}/ssu_all.fna.gz')
+        bash(f'gunzip {DBpath}/ssu_all.fna.gz 2>> {log}')
+        bash(f'makeblastdb -in {DBpath}/ssu_all.fna -parse_seqids -dbtype "nucl"')
+        
+        #mapping file
+        with open(f'{DBpath}/ssu_all.fna', 'rt') as fa:
+            ls = [l[1:].replace(' d_','\td_').split(' [')[0] for l in fa.readlines() if l.startswith('>')]
+            with open(f'{DBpath}/map.tsv', 'wt') as ref:
+                ref.write('SeqID\tTaxonomy\n')
+                ref.write('\n'.join(ls))
+        bash(f'rm {DBpath}/ssu_all.fna')
+        
     else:
         print('Database exists. Skipping')
         bash(f'echo "{DB} database exists. Skipping." >> {log}')
@@ -405,7 +408,7 @@ def taxonomy_annotation(DB, DBV, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac,
     #annotate
     if not os.path.exists(f"{OUT}/blastn.tsv"):
         print(f'\nAssigning taxonomy...')
-        bash(f'blastn -query {Q} -db {DBpath}/dna-sequences.fasta -task blastn -qcov_hsp_perc 80 \
+        bash(f'blastn -query {Q} -db {DBpath}/ssu_all.fna -task blastn -qcov_hsp_perc 80 \
                -num_threads {T} -out {OUT}/blastn.tsv -max_target_seqs 50 -max_hsps 50 \
                -outfmt "6 qseqid sseqid evalue length pident nident bitscore score gaps" 2>> {log}')
     else:
@@ -420,10 +423,10 @@ def taxonomy_annotation(DB, DBV, DB_type, FWD, RVS, MINL, MAXL, MASK, gap, frac,
     #get full taxonomies
     if not os.path.exists(f"{FI}/Taxonomy.tsv"):
         print('\nMapping GTDB to get full taxonomies...')
-        mapp = pd.read_csv(f'{DBpath}/taxonomy.tsv', sep='\t')
-        mapp.Taxon = mapp.Taxon.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
+        mapp = pd.read_csv(f'{DBpath}/map.tsv', sep='\t')
+        mapp.Taxonomy = mapp.Taxonomy.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
                      ' '.join(x.rsplit(';', 1)[-1].split(' ')[:2]).replace('_', ' ').replace('  ', '__'))
-        mapping = dict(mapp[['Feature ID', 'Taxon']].values)
+        mapping = dict(mapp[['SeqID', 'Taxonomy']].values)
         for cluster in queries:
             bclust = blast.loc[blast.Cluster == cluster].copy()
             #apply "Gap" filtering
@@ -474,10 +477,7 @@ def main():
                          'that are considered with the top hit for taxonomy selection (default 1)'])
     frac_help = " ".join(['If numerous hits retained after gap filtering, consensus taxon should have at least this',
                           'fraction to be selected. Otherwise set as lower level + unclassified (default 0.6)'])
-    db_type_help = " ".join(['Use all rRNAs from GTDB ("All", higher accuracy, slower) or only',
-                             'representative species ("SpeciesReps", lower accuracy, faster) (default "All")'])
-    db_version_help = " ".join(['GTDB version. Choices: "202.0", "207.0", "214.0", "214.1", "220.0",',
-                             '"226.0" (default "226.0")'])
+    db_version_help = " ".join(['GTDB version. Choices: ""220.0", "226.0", "latest" (default "latest")'])
     mask_taxa_help = " ".join(['Mask taxonomy ranks based on percent identity thresholds (default "True").',
                                'Thresholds are: d: 65, p: 75, c: 78.5,o: 82, f: 86.5, g: 94.5, s: 97'])
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
@@ -495,22 +495,19 @@ def main():
     opt.add_argument("--phred", help="Minimum phred score for chopper (default 10)", type=int, default=10)
     opt.add_argument("--min_length", help="Minimum read length for chopper (default 1300)", type=int, default=1200)
     opt.add_argument("--max_length", help="Maximum read length for chopper (default 1700)", type=int, default=2000)
-    opt.add_argument("--primer_F", help="Forward primer (default AGAGTTTGATCMTGGCTCAG)", default='AGAGTTTGATCMTGGCTCAG')
-    opt.add_argument("--primer_R", help="Reverse primer (default CGGTTACCTTGTTACGACTT)", default='CGGTTACCTTGTTACGACTT')
-    opt.add_argument("--primer_PI", help="Percent identity for primers (default 0.6)", type=float, default=0.6)
+    opt.add_argument("--min_sample_size", help="Minimum sample size to be retained (default 500)", type=int, default=500)
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--cluster_size", help="Min. unique cluster size (default 10, can't be < 10)", type=int, default=10)
     opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 200)', type=int, default=200)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
-    opt.add_argument('--db_type', help=db_type_help, default='All')
-    opt.add_argument('--db_version', help=db_version_help, default='226.0')
+    opt.add_argument('--db_version', help=db_version_help, default='latest')
     opt.add_argument("--gap", help=gap_help, type=float, default=1)
     opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
     opt.add_argument("--mask_taxa", help=mask_taxa_help, action='store_true', default=True)
     opt.add_argument("--no_masking", help="Skip masking taxonomy step", dest='mask_taxa', action='store_false')
     opt.add_argument("--random_state", help="Random state for subsampling (default 888)", type=int, default=888)
     opt.add_argument("--n_polish", help="Number of polishing rounds (default 3)", type=int, default=3)
-    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}-{DBV}/{db_type}')
+    opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}-{DBV}')
     opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
     args = parser.parse_args()
     
@@ -540,12 +537,9 @@ def main():
         print('\nPlease, cite chopper: https://doi.org/10.1093/bioinformatics/btad311')
     else:
         print(f"Chopper is disabled. Skipping")
-    #extracting reads with rescript
-    extract_reads(INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, FWD=args.primer_F, RVS=args.primer_R, log=log,
-                  PI=args.primer_PI, MINL=args.min_length, MAXL=args.max_length, OUT=f'{QC}/Fastas', LOGS=LOGS)
-    INPDIR = f"{QC}/Fastas"
-    print('\nPlease, cite RESCRIPt: http://dx.doi.org/10.1371/journal.pcbi.1009581')
-    print(f"\nEnd of the {module.replace('_', ' ')} module")
+    #ingnoring samples with low count
+    LOWS = min_sample_size(INPUT=INPDIR, SAMPLES=SAMPLES, LOGS=LOGS, log=log, MinSS=args.min_sample_size)
+    SAMPLES = [s for s in SAMPLES if s not in LOWS]
     
     ###### Clustering #####
     module = CL.split('/')[-1]
@@ -553,8 +547,7 @@ def main():
     log = f"{LOGS}/{module}.log"
     #kmers counting
     print(f"Counting kmers ({args.kmer}-mers) for all samples...")
-    kmer_counter(OUT=CL, INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, L=args.kmer, 
-                 log=log, ext='fasta', fmt='fasta')
+    kmer_counter(OUT=CL, INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, L=args.kmer, log=log)
     #clustering with UMAP + HDBscan
     clustering_UMAP_HDBscan(OUT=CL, T=args.threads, EPS=args.select_epsilon, log=log,
                             CLUST_UQ=args.cluster_size, SAMPLES=SAMPLES, RSTAT=args.random_state)
@@ -581,10 +574,8 @@ def main():
     module = TA.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
-    taxonomy_annotation(DB='GTDB', DB_type=args.db_type, FWD=args.primer_F, RVS=args.primer_R, 
-                        DBV=args.db_version, MINL=args.min_length, MAXL=args.max_length, gap=args.gap,
-                        frac=args.min_fraction, T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, 
-                        MASK=args.mask_taxa, log=log)
+    taxonomy_annotation(DB='GTDB', DBV=args.db_version, gap=args.gap, frac=args.min_fraction, 
+                        T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, MASK=args.mask_taxa, log=log)
     print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
     print('Please, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
     print(f"\nEnd of the {module.replace('_', ' ')} module")

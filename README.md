@@ -11,30 +11,21 @@ So, Nameco will preprocess the reads, count kmers and then perform clustering wi
 
 ## Dependencies 
 Linux OS with conda installed (anaconda3, miniconda3 or miniforge). 
-- qiime2 (partial)
-- q2cli
-- q2templates
-- q2-types
-- q2-longitudinal
-- q2-feature-classifier
 - pandas>=0.25.3
 - xmltodict 
-- ncbi-datasets-pyclient=18.4.0
-- rescript
 - python
 - chopper=0.7.0
 - biopython
 - matplotlib
 - blast=2.16
-- scikit-learn
-- umap-learn=0.5.7
+- scikit-learn=1.8
+- umap-learn=0.5.11
 - racon=1.5.0
 - minimap2=2.28
 - spoa=4.1.4
 - ipykernel
 - pigz
 - pip
-- pip:
     - nameco
 
 ## Installation
@@ -67,7 +58,7 @@ config --set solver libmamba
 ```
 
 ## Data preparation
-Nanopore sequencers often output samples as multiple small-sized fastq files for each barcode. NaMeco accepts ONE fastq file as ONE sample, so please concatenate multiple files that belong to the same sample before running NaMeco. For example, if you have a folder named "barcode01",  which contains multiple fastq.gz files that belong to Sample1, you can use the following command: 
+Nanopore sequencers often output samples as multiple small-sized fastq files for each barcode. ***NaMeco accepts ONE fastq file as ONE sample***, so please ***concatenate*** multiple files that belong to the same sample ***before*** running NaMeco. For example, if you have a folder named "barcode01",  which contains multiple fastq.gz files that belong to Sample1, you can use the following command: 
 
 
 ```python
@@ -86,10 +77,9 @@ To run the pipeline, please provide the path to raw reads and adjust threads. Th
 ```python
 usage: nameco [-h] --inp_dir INP_DIR [--out_dir OUT_DIR] [--threads THREADS]
               [--qc] [--no-qc] [--phred PHRED] [--min_length MIN_LENGTH]
-              [--max_length MAX_LENGTH] [--primer_F PRIMER_F]
-              [--primer_R PRIMER_R] [--primer_PI PRIMER_PI] [--kmer KMER]
-              [--cluster_size CLUSTER_SIZE] [--subsample SUBSAMPLE]
-              [--select_epsilon SELECT_EPSILON] [--db_type DB_TYPE]
+              [--max_length MAX_LENGTH] [--min_sample_size MIN_SAMPLE_SIZE]
+              [--kmer KMER] [--cluster_size CLUSTER_SIZE]
+              [--subsample SUBSAMPLE] [--select_epsilon SELECT_EPSILON]
               [--db_version DB_VERSION] [--gap GAP]
               [--min_fraction MIN_FRACTION] [--mask_taxa] [--no_masking]
               [--random_state RANDOM_STATE] [--n_polish N_POLISH]
@@ -112,10 +102,8 @@ optional arguments:
                         Minimum read length for chopper (default 1300)
   --max_length MAX_LENGTH
                         Maximum read length for chopper (default 1700)
-  --primer_F PRIMER_F   Forward primer (default AGAGTTTGATCMTGGCTCAG)
-  --primer_R PRIMER_R   Reverse primer (default CGGTTACCTTGTTACGACTT)
-  --primer_PI PRIMER_PI
-                        Percent identity for primers (default 0.6)
+  --min_sample_size MIN_SAMPLE_SIZE
+                        Minimum sample size to be retained (default 500)
   --kmer KMER           K-mer length for clustering (default 5)
   --cluster_size CLUSTER_SIZE
                         Min. unique cluster size (default 10, can't be < 10)
@@ -124,12 +112,9 @@ optional arguments:
                         polishing (default 200)
   --select_epsilon SELECT_EPSILON
                         Selection epsilon for clusters (default 0.1)
-  --db_type DB_TYPE     Use all rRNAs from GTDB ("All", higher accuracy,
-                        slower) or only representative species ("SpeciesReps",
-                        lower accuracy, faster) (default "All")
   --db_version DB_VERSION
-                        GTDB version. Choices: "202.0", "207.0", "214.0",
-                        "214.1", "220.0", "226.0" (default "226.0")
+                        GTDB version. Choices: ""220.0", "226.0", "latest"
+                        (default "latest")
   --gap GAP             Gap between the bit score of the best hit and others,
                         that are considered with the top hit for taxonomy
                         selection (default 1)
@@ -177,7 +162,6 @@ It is the main output of the pipeline.
 
 ### Quality_control
 - Chopper - contains reads after QC with Chopper.
-- Fastas - fasta files after primer-specific read extraction with RESCRIPt
 
 ### Clustering
 - Folders with sample names:
@@ -212,7 +196,7 @@ Example commands are listed below:
 
 
 ```python
-#can be done in your qiime2 env. or in NaMeco
+#can be done in your qiime2 env
 
 mkdir to_qiime2
 

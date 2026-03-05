@@ -2,26 +2,16 @@ name: NaMeco
 channels:
 - conda-forge
 - bioconda
-- https://packages.qiime2.org/qiime2/2025.7/moshpit/passed/
-- https://packages.qiime2.org/qiime2/2025.7/amplicon/passed/
 dependencies:
-- qiime2
-- q2cli
-- q2templates
-- q2-types
-- q2-longitudinal
-- q2-feature-classifier
 - pandas>=0.25.3
 - xmltodict 
-- ncbi-datasets-pyclient=18.4.0
-- rescript
 - python
 - chopper=0.7.0
 - biopython
 - matplotlib
 - blast=2.16
-- scikit-learn
-- umap-learn=0.5.7
+- scikit-learn=1.8
+- umap-learn=0.5.11
 - racon=1.5.0
 - minimap2=2.28
 - spoa=4.1.4
