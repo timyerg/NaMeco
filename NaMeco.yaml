@@ -1,8 +1,9 @@
-name: NaMeco
+name: NaMeco_Test
 channels:
 - conda-forge
 - bioconda
 dependencies:
+- numpy<=2
 - pandas>=0.25.3
 - xmltodict 
 - python
