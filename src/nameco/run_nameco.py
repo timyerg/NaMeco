@@ -24,7 +24,8 @@ def bash(cmd):
 
 
 #Function to print greetings 
-def greetings():
+def greetings(log):
+    tool_version = version("nameco")
     grt = """
 ######################################################
 #                                                    #
@@ -42,10 +43,12 @@ def greetings():
 ######################################################
 
 Powered by Coffee
+You are running NaMeco v{}
 If you used this pipeline, please cite our paper: https://doi.org/10.1186/s12864-025-12415-x
 Also, don't forget to cite the tools that were used in this pipeline
     """
-    print(grt)
+    print(grt.format(tool_version))
+    bash(f'echo "You are running NaMeco v{tool_version}" >> {log}')
     
 
 #Function to wrap messages into hashtags
@@ -181,6 +184,7 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
             sub = clusters.loc[clusters.Cluster == cid].copy()
             if len(sub) > 100:
                 sub = sub.sample(n=100, random_state=RSTAT)
+            data = data.copy()
             data.loc[sub.Feature.tolist(),'FullID'] = sample+'___'+cid+'___'
         data = data[data['FullID'].notna()]
         data.FullID = data.FullID + data.index.astype(str)
@@ -511,7 +515,6 @@ def main():
     opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
     args = parser.parse_args()
     
-    greetings()
     INPDIR = args.inp_dir
     LOGS = f'{args.out_dir}/Logs'
     QC = f'{args.out_dir}/Quality_control'
@@ -520,6 +523,7 @@ def main():
     TA = f'{args.out_dir}/Taxonomy_annotation'
     FI = f'{args.out_dir}/Final_output'
     exts = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
+    greetings(log=f"{LOGS}/NaMeco_version.log")
     SAMPLES = [f.split('.')[0] for f in os.listdir(INPDIR) if f.endswith(exts)]
     print('Only "*.fastq.gz", "*.fq.gz", "*.fastq" or "*.fq" files will be procsessed')
     if len(SAMPLES) == 0:
