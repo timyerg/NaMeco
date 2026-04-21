@@ -24,7 +24,8 @@ def bash(cmd):
 
 
 #Function to print greetings 
-def greetings(log):
+def greetings(log, LOGS):
+    bash(f'mkdir -p {LOGS}')
     tool_version = version("nameco")
     grt = """
 ######################################################
@@ -523,7 +524,7 @@ def main():
     TA = f'{args.out_dir}/Taxonomy_annotation'
     FI = f'{args.out_dir}/Final_output'
     exts = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
-    greetings(log=f"{LOGS}/NaMeco_version.log")
+    greetings(log=f"{LOGS}/NaMeco_version.log", LOGS=LOGS)
     SAMPLES = [f.split('.')[0] for f in os.listdir(INPDIR) if f.endswith(exts)]
     print('Only "*.fastq.gz", "*.fq.gz", "*.fastq" or "*.fq" files will be procsessed')
     if len(SAMPLES) == 0:
