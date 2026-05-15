@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nameco"
+version = "1.3.3"
+authors = [
+  { name="Timur Yergaliyev", email="timyerg@gmail.com" },
+]
+description = "Pipeline for the Nanopore 16S long read clustering and taxonomy classification"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+]
+
+[tool.setuptools.package-dir]
+nameco = "nameco"
+
+[project.scripts]
+nameco = "nameco.run_nameco:main"
+
+[project.urls]
+Homepage = "https://github.com/timyerg/NaMeco"
+Issues = "https://github.com/timyerg/NaMeco/issues"
+
