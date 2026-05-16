@@ -4,7 +4,16 @@ from ._helper import *
 
 
 ###Functions for taxonomy annotation
-#def fetch_db(fetch, DBpath, log):
+def fetch_db(fetch, DBpath, log):
+    link = "https://github.com/timyerg/NaMeco/raw/refs/heads/main/Databases/{V}.zip"
+    
+    #dict with UNITE prebuild databases and DOIs for citations
+    UNITEs = {
+        'fungi_V10': 'https://dx.doi.org/10.15156/BIO/3301229',
+        'fungi-2_V10': 'https://dx.doi.org/10.15156/BIO/3301230',
+        'eukaryotes_V10': 'https://dx.doi.org/10.15156/BIO/3301231',
+        'eukaryotes-2_V10': 'https://dx.doi.org/10.15156/BIO/3301232',
+    }
     
 
 
@@ -38,7 +47,7 @@ def top_hit(bclust, taxa, frac):
     return taxon, pind
 
 def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
-    print(f'Starting taxonomy annotations with blastn against {DB}...')
+    print(f'Starting taxonomy annotations with blastn...')
     Q=f'{FI}/rep_seqs.fasta'
     DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB)
     queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
@@ -48,7 +57,7 @@ def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
     bash(f'mkdir -p {OUT} {FI}')
     
     #create DB
-    if not os.path.exists(f"{DBpath}/ssu_all.fna.ndb"):
+    if not os.path.exists(f"{DBpath}/db.fa.ndb"):
         print(f'Creating database...')
         substr = DBV if DBV == 'latest' else f"release{DBV.split('.')[0]}/{DBV}"
         suffix = "ssu_all" if DBV == 'latest' else f"ssu_all_r{DBV.split('.')[0]}"
@@ -75,9 +84,10 @@ def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
     #annotate
     if not os.path.exists(f"{OUT}/blastn.tsv"):
         print(f'\nAssigning taxonomy...')
-        bash(f'blastn -query {Q} -db {DBpath}/db.fa -task blastn -qcov_hsp_perc 80 \
-               -num_threads {T} -out {OUT}/blastn.tsv -max_target_seqs 50 -max_hsps 50 \
+        bash(f'blastn -query {Q} -db {DBpath}/db.fa -task megablast \
+               -num_threads {T} -out {OUT}/blastn.tsv -max_target_seqs 50 \
                -outfmt "6 qseqid sseqid evalue length pident nident bitscore score gaps" 2>> {log}')
+
     else:
         print('\nBlastn output exists. Skipping')
         bash(f'echo "Blastn output exists. Skipping." >> {log}')

@@ -122,10 +122,18 @@ def main():
     module = TA.split('/')[-1]
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
+    DBpath=args.db_path
     taxonomy_annotation(DB='GTDB', DBV=args.db_version, gap=args.gap, frac=args.min_fraction, 
-                        T=args.threads, OUT=TA, FI=FI, DBpath=args.db_path, MASK=args.mask_taxa, log=log)
-    print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
-    print('Please, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
+                        T=args.threads, OUT=TA, FI=FI, DBpath=DBpath, MASK=args.mask_taxa, log=log)
+    if "GTDB" in DBpath:
+        print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
+    elif "UNITE" in DBpath:
+        print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
+        print('Also, cite the version of UNITE database you used.')
+        print('Check citation here (General FASTA release): https://unite.ut.ee/repository.php#panel5a')
+    else:
+        print('\nPlease, cite the database you used.')
+    print('\nPlease, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
     print(f"\nEnd of the {module.replace('_', ' ')} module")
     module = "NaMeco run successfully completed. Enjoy your data!"
     hashtags_wrapper(f"{module.replace('_', ' ')}")
