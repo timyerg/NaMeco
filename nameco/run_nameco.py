@@ -43,13 +43,13 @@ def main():
     opt.add_argument("--threads", help="The number of threads/cpus (default 2)", type=int, default=2)
     opt.add_argument("--qc", help="Run chopper for quality control (default)", action='store_true', default=True)
     opt.add_argument("--no-qc", help="Skip chopper for quality control", dest='qc', action='store_false')
-    opt.add_argument("--phred", help="Minimum phred score for chopper (default 10)", type=int, default=10)
-    opt.add_argument("--min_length", help="Minimum read length for chopper (default 1300)", type=int, default=1200)
-    opt.add_argument("--max_length", help="Maximum read length for chopper (default 1700)", type=int, default=2000)
+    opt.add_argument("--phred", help="Minimum phred score for chopper (default 8)", type=int, default=8)
+    opt.add_argument("--min_length", help="Minimum read length for chopper (default 1000)", type=int, default=1000)
+    opt.add_argument("--max_length", help="Maximum read length for chopper (default 1800)", type=int, default=1800)
     opt.add_argument("--min_sample_size", help="Minimum sample size to be retained (default 500)", type=int, default=500)
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--cluster_size", help="Min. unique cluster size (default 10, can't be < 10)", type=int, default=10)
-    opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 200)', type=int, default=200)
+    opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 300)', type=int, default=300)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
     opt.add_argument('--fetch_db', help=fetch_db_help, default=False)
     opt.add_argument('--db_version', help=db_version_help, default='latest')
@@ -57,7 +57,7 @@ def main():
     opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
     opt.add_argument("--mask_taxa", help=mask_taxa_help, action='store_true', default=True)
     opt.add_argument("--no_masking", help="Skip masking taxonomy step", dest='mask_taxa', action='store_false')
-    opt.add_argument("--random_state", help="Random state for subsampling (default 888)", type=int, default=888)
+    opt.add_argument("--random_state", help="Random state for subsampling (default 42)", type=int, default=42)
     opt.add_argument("--n_polish", help="Number of polishing rounds (default 3)", type=int, default=3)
     opt.add_argument('--db_path', help=db_path_help, default='{OUT}/{DB}-{DBV}')
     opt.add_argument('--version', help="Check the version", action="version", version=version("nameco"))
@@ -131,7 +131,7 @@ def main():
     taxonomy_annotation(DB='GTDB', DBV=args.db_version, gap=args.gap, frac=args.min_fraction, 
                         T=args.threads, OUT=TA, FI=FI, DBpath=DBpath, MASK=args.mask_taxa, 
                         FETCH=FETCH, log=log)
-    if "GTDB" in DBpath:
+    if "GTDB" in DBpath or "GTDB" in FETCH:
         print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
     if "UNITE" in DBpath or "UNITE" in FETCH:
         print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
