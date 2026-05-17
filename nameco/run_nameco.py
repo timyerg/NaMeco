@@ -25,7 +25,10 @@ def main():
                          'that are considered with the top hit for taxonomy selection (default 1)'])
     frac_help = " ".join(['If numerous hits retained after gap filtering, consensus taxon should have at least this',
                           'fraction to be selected. Otherwise set as lower level + unclassified (default 0.6)'])
-    db_version_help = " ".join(['GTDB version. Choices: ""220.0", "226.0", "232.0", "latest" (default "latest")'])
+    fetch_db_help = " ".join(['Fetch prebuild database. Choices: "GTDB_220", "GTDB_226", "GTDB_232",',
+                              '"UNITE_fungi_V10", "UNITE_fungi-2_V10", "UNITE_eukaryotes_V10"',
+                              '"UNITE_eukaryotes-2_V10" (default False)'])
+    db_version_help = " ".join(['GTDB version. Choices: "220.0", "226.0", "232.0", "latest" (default "latest")'])
     mask_taxa_help = " ".join(['Mask taxonomy ranks based on percent identity thresholds (default "True").',
                                'Thresholds are: d: 65, p: 75, c: 78.5,o: 82, f: 86.5, g: 94.5, s: 97'])
     db_path_help = " ".join(['Path to store/existing database (default $out_dir/$database).', 
@@ -48,6 +51,7 @@ def main():
     opt.add_argument("--cluster_size", help="Min. unique cluster size (default 10, can't be < 10)", type=int, default=10)
     opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 200)', type=int, default=200)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
+    opt.add_argument('--fetch_db', help=fetch_db_help, default=False)
     opt.add_argument('--db_version', help=db_version_help, default='latest')
     opt.add_argument("--gap", help=gap_help, type=float, default=1)
     opt.add_argument("--min_fraction", help=frac_help, type=float, default=.6)
@@ -123,11 +127,13 @@ def main():
     hashtags_wrapper(f"{module.replace('_', ' ')} module")
     log = f"{LOGS}/{module}.log"
     DBpath=args.db_path
+    FETCH=args.fetch_db
     taxonomy_annotation(DB='GTDB', DBV=args.db_version, gap=args.gap, frac=args.min_fraction, 
-                        T=args.threads, OUT=TA, FI=FI, DBpath=DBpath, MASK=args.mask_taxa, log=log)
+                        T=args.threads, OUT=TA, FI=FI, DBpath=DBpath, MASK=args.mask_taxa, 
+                        FETCH=FETCH, log=log)
     if "GTDB" in DBpath:
         print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
-    elif "UNITE" in DBpath:
+    if "UNITE" in DBpath or "UNITE" in FETCH:
         print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
         print('Also, cite the version of UNITE database you used.')
         print('Check citation here (General FASTA release): https://unite.ut.ee/repository.php#panel5a')

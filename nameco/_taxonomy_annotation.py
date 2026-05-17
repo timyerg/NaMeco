@@ -4,19 +4,6 @@ from ._helper import *
 
 
 ###Functions for taxonomy annotation
-def fetch_db(fetch, DBpath, log):
-    link = "https://github.com/timyerg/NaMeco/raw/refs/heads/main/Databases/{V}.zip"
-    
-    #dict with UNITE prebuild databases and DOIs for citations
-    UNITEs = {
-        'fungi_V10': 'https://dx.doi.org/10.15156/BIO/3301229',
-        'fungi-2_V10': 'https://dx.doi.org/10.15156/BIO/3301230',
-        'eukaryotes_V10': 'https://dx.doi.org/10.15156/BIO/3301231',
-        'eukaryotes-2_V10': 'https://dx.doi.org/10.15156/BIO/3301232',
-    }
-    
-
-
 
 #Percent identity thresholds to mask false positive annotations
 def taxonomy_thresholds(bclust, thresholds):
@@ -46,15 +33,31 @@ def top_hit(bclust, taxa, frac):
             taxon = taxon.rsplit(';',1)[0] +';'+ taxon.rsplit(';',1)[-1].split(' ')[0] + ' unclassified'
     return taxon, pind
 
-def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
+def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, FETCH, DBpath, log):
     print(f'Starting taxonomy annotations with blastn...')
     Q=f'{FI}/rep_seqs.fasta'
-    DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB)
     queries = [l[1:].split(' ')[0].split('\n')[0] for l in open(Q, 'rt') if l.startswith('>')]
     thresholds = {'Domain': 65, 'Phylum': 75, 'Class': 78.5,
                   'Order': 82, 'Family': 86.5, 'Genus': 94.5, 'Species': 97}
     taxa = pd.DataFrame(columns=['Taxon', 'Perc. id.'])
     bash(f'mkdir -p {OUT} {FI}')
+    
+    #fetch database
+    if FETCH != False:
+        print(f'Fetching database {FETCH}...')
+        link = "https://github.com/timyerg/NaMeco/raw/refs/heads/main/Databases/{V}.zip"
+        DBpath = DBpath.replace('-{DBV}', '')
+        if '{DB}' in DBpath:
+            DBpath = DBpath.format(DB=FETCH, OUT=OUT)
+        else:
+            DBpath = DBpath +'/'+ FETCH
+        if not os.path.exists(f"{DBpath}/db.fa.ndb"):
+            bash(f'mkdir -p {DBpath}')
+            bash(f'wget {link.format(V=FETCH)} -O {DBpath}.zip 2>> {log}')
+            bash(f'unzip {DBpath}.zip -d {DBpath}')
+            bash(f'rm {DBpath}.zip')
+    else:
+        DBpath = DBpath.format(OUT=OUT, DBV=DBV, DB=DB)
     
     #create DB
     if not os.path.exists(f"{DBpath}/db.fa.ndb"):
@@ -99,7 +102,7 @@ def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, DBpath, log):
 
     #get full taxonomies
     if not os.path.exists(f"{FI}/Taxonomy.tsv"):
-        print('\nMapping GTDB to get full taxonomies...')
+        print('\nMapping database to get full taxonomies...')
         mapp = pd.read_csv(f'{DBpath}/map.tsv', sep='\t')
         mapp.Taxonomy = mapp.Taxonomy.apply(lambda x: x.rsplit(';', 1)[0] +';'+ 
                      ' '.join(x.rsplit(';', 1)[-1].split(' ')[:2]).replace('_', ' ').replace('  ', '__'))
