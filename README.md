@@ -311,6 +311,6 @@ BMC Genomics (2025). https://doi.org/10.1186/s12864-025-12415-x
 - If you used GTDB: https://doi.org/10.1038/s41587-020-0501-8
 - If you used UNITE database, cite both their paper and database: 
     - Paper: https://doi.org/10.1093/nar/gkad1039
-    - Database: Abarenkov, Kessy; Zirk, Allan; Piirmann, Timo; Pöhönen, Raivo; Ivanov, Filipp; Nilsson, R. Henrik; Kõljalg, Urmas (2025): UNITE general FASTA release for {DATABASE}. Version 19.02.2025. UNITE Community. {DOI}. ##### Replace {DATABASE} and {DOI} by dorresponding data from https://unite.ut.ee/repository.php#panel5a (General FASTA release) #####.
+    - Database: Abarenkov, Kessy; Zirk, Allan; Piirmann, Timo; Pöhönen, Raivo; Ivanov, Filipp; Nilsson, R. Henrik; Kõljalg, Urmas (2025): UNITE general FASTA release for {DATABASE}. Version 19.02.2025. UNITE Community. {DOI}. ##### Replace {DATABASE} and {DOI} by corresponding data from https://unite.ut.ee/repository.php#panel5a (General FASTA release) #####.
 
 
