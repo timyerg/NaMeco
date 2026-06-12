@@ -24,6 +24,7 @@ Linux OS with conda installed (anaconda3, miniconda3 or miniforge).
 - umap-learn=0.5.11
 - racon=1.5.0
 - minimap2=2.28
+- samtools=1.21
 - spoa=4.1.4
 - ipykernel
 - pigz
