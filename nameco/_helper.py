@@ -43,11 +43,11 @@ def hashtags_wrapper(sub):
     
     
 #Function to check logs
-def log_checker(log, samples, file):
+def log_checker(log, samples, file, pat='done. Enjoy\n'):
     skip, checks = [], []
     if os.path.exists(log):
         with open(log, 'rt') as txt:
-            skip = [l.split(' ')[0] for l in txt.readlines() if l.endswith('done. Enjoy\n')]
+            skip = [l.split(' ')[0] for l in txt.readlines() if l.endswith(pat)]
     for sample in samples:
         checks.append(os.path.exists(file.format(sample)))
         checks.append(sample in skip)

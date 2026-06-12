@@ -17,6 +17,7 @@ dependencies:
 - minimap2=2.28
 - spoa=4.1.4
 - ipykernel
+- samtools=1.21
 - pigz
 - pip
 - pip:

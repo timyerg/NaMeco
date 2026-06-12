@@ -24,8 +24,11 @@ def chopper(INPUT, SAMPLES, T, Q, MINL, MAXL, OUT, LOGS, log):
         
 
 #Function to find samples with too low counts
-def min_sample_size(INPUT, SAMPLES, LOGS, MinSS, log):
+def min_sample_size(INPUT, SAMPLES, OUT, LOGS, MinSS, log):
     print(f'\nSamples with sample size after QC less than {MinSS} reads will be ignored')
+    skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}.fq.gz', 'has enough reads\n')
+    if all(checks):
+        return print(f'All samples were already checked for sequencing depth. Skipping')
     bash(f'echo "\n##### Checking sample sizes after QC #####\n" >> {log}')
     LOWS = []
     bash(f'mkdir -p {LOGS}')
@@ -36,4 +39,5 @@ def min_sample_size(INPUT, SAMPLES, LOGS, MinSS, log):
             bash(f'echo "{sample} with {int(ss)} reads will be ignored" >> {log}')
             LOWS.append(sample)
             print(f'{sample} with {int(ss)} reads will be ignored. If needed, adjust "--min_sample_size"')
+        bash(f'echo "{sample} has enough reads" >> {log}')
     return LOWS

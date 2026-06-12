@@ -133,7 +133,7 @@ def taxonomy_annotation(DB, DBV, MASK, gap, frac, T, OUT, FI, FETCH, DBpath, log
         taxa.to_csv(f'{FI}/Taxonomy.tsv', sep='\t')
         
     #collapse taxonomies
-    print('\nChecking if collapsed taxonomies exist...')
+    print('\nChecking if collapsed taxonomies exist...\n')
     taxa = pd.read_csv(f'{FI}/Taxonomy.tsv', sep='\t', index_col=0)
     counts = pd.read_csv(f'{FI}/cluster_counts.tsv', sep='\t', index_col=0)
     for rank in thresholds:

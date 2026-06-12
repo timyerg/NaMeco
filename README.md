@@ -107,6 +107,9 @@ optional arguments:
   --min_sample_size MIN_SAMPLE_SIZE
                         Minimum sample size to be retained (default 500)
   --kmer KMER           K-mer length for clustering (default 5)
+  --cluster_reps CLUSTER_REPS
+                        Subsample unique clusters for between-samples 
+                        clustering (default 50)
   --cluster_size CLUSTER_SIZE
                         Min. unique cluster size (default 10, can't be < 10)
   --subsample SUBSAMPLE
@@ -277,6 +280,7 @@ If needed, the aforementioned commands can be adapted to import collapsed taxono
 - Using multiple threads can significantly speed up the NaMeco run.
 - If you are facing issues with the drive space on your working drive, export the tmp directory before running NaMeco: "export TMPDIR=/big_storage_path/TMP".
 - "Counting k-mers" can take a long time, just wait until it is done. Good time to make some coffee!
+- When working with a large number of samples, NaMeco can run out of memory while clustering representative sequences for each unique cluster across samples. By default, it uses 50 such sequences. To reduce the RAM required, one can use the "--cluster_reps" parameter. Set it to 25 or even 10 to decrease RAM requirements, or increase it to 100 or higher to improve clustering at the cost of RAM.
 
 ## Unassigned sequences
 - When I blasted unassigned sequences from different datasets, I tested on the NCBI blastn, and those sequences were annotated as host DNA. Somehow, the host DNA was amplified with bacterial primers. So, for downstream analyses, one should either remove unassigned sequences or BLAST them against NCBI to double-check.
@@ -305,6 +309,7 @@ BMC Genomics (2025). https://doi.org/10.1186/s12864-025-12415-x
 #### Polishing
 - Minimap2: https://doi.org/10.1093/bioinformatics/bty191
 - Racon: https://doi.org/10.1101%2Fgr.214270.116
+- Samtools: https://doi.org/10.1093/bioinformatics/btp352
 #### Taxonomy annotation tool
 - BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2
 #### Database:
@@ -314,3 +319,8 @@ BMC Genomics (2025). https://doi.org/10.1186/s12864-025-12415-x
     - Database: Abarenkov, Kessy; Zirk, Allan; Piirmann, Timo; Pöhönen, Raivo; Ivanov, Filipp; Nilsson, R. Henrik; Kõljalg, Urmas (2025): UNITE general FASTA release for {DATABASE}. Version 19.02.2025. UNITE Community. {DOI}. ##### Replace {DATABASE} and {DOI} by corresponding data from https://unite.ut.ee/repository.php#panel5a (General FASTA release) #####.
 
 
+
+
+```python
+
+```

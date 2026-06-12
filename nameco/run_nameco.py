@@ -49,6 +49,7 @@ def main():
     opt.add_argument("--min_sample_size", help="Minimum sample size to be retained (default 500)", type=int, default=500)
     opt.add_argument("--kmer", help="K-mer length for clustering (default 5)", type=int, default=5)
     opt.add_argument("--cluster_size", help="Min. unique cluster size (default 10, can't be < 10)", type=int, default=10)
+    opt.add_argument("--cluster_reps", help='Subsample unique clusters for between-samples clustering (default 50)', type=int, default=50)
     opt.add_argument("--subsample", help='Subsample clusters for consensus creation and polishing (default 300)', type=int, default=300)
     opt.add_argument("--select_epsilon", help="Selection epsilon for clusters (default 0.1)", type=float, default=0.1)
     opt.add_argument('--fetch_db', help=fetch_db_help, default=False)
@@ -90,8 +91,10 @@ def main():
     else:
         print(f"Chopper is disabled. Skipping")
     #ingnoring samples with low count
-    LOWS = min_sample_size(INPUT=INPDIR, SAMPLES=SAMPLES, LOGS=LOGS, log=log, MinSS=args.min_sample_size)
-    SAMPLES = [s for s in SAMPLES if s not in LOWS]
+    LOWS = min_sample_size(INPUT=INPDIR, SAMPLES=SAMPLES, LOGS=LOGS, log=log, 
+    			   OUT=f'{QC}/Chopper', MinSS=args.min_sample_size)
+    if isinstance(LOWS, list):
+    	SAMPLES = [s for s in SAMPLES if s not in LOWS]
     
     ###### Clustering #####
     module = CL.split('/')[-1]
@@ -101,8 +104,8 @@ def main():
     print(f"Counting kmers ({args.kmer}-mers) for all samples...")
     kmer_counter(OUT=CL, INPUT=INPDIR, SAMPLES=SAMPLES, T=args.threads, L=args.kmer, log=log)
     #clustering with UMAP + HDBscan
-    clustering_UMAP_HDBscan(OUT=CL, T=args.threads, EPS=args.select_epsilon, log=log,
-                            CLUST_UQ=args.cluster_size, SAMPLES=SAMPLES, RSTAT=args.random_state)
+    clustering_UMAP_HDBscan(OUT=CL, T=args.threads, EPS=args.select_epsilon, log=log, SAMPLES=SAMPLES,
+    			    C_REPS=args.cluster_reps, CLUST_UQ=args.cluster_size, RSTAT=args.random_state)
     #pool clusters from samples to shared clusters and recalculate abundances
     shared_clusters(OUT=CL, FI=FI, SAMPLES=SAMPLES, RSTAT=args.random_state, 
                     SUBS=args.subsample, T=args.threads, log=log)
@@ -120,6 +123,7 @@ def main():
     read_correction(OUT=RC, N=args.n_polish, FI=FI, T=args.threads, log=log)
     print('\nPlease, cite minimap2: https://doi.org/10.1093/bioinformatics/bty191')
     print('Please, cite racon: https://doi.org/10.1101%2Fgr.214270.116')
+    print('Please, cite samtools: https://doi.org/10.1093/bioinformatics/btp352')
     print(f"\nEnd of the {module.replace('_', ' ')} module")
 
     ###### Taxonomy annotation ######
@@ -128,17 +132,28 @@ def main():
     log = f"{LOGS}/{module}.log"
     DBpath=args.db_path
     FETCH=args.fetch_db
-    taxonomy_annotation(DB='GTDB', DBV=args.db_version, gap=args.gap, frac=args.min_fraction, 
+    DB='GTDB'
+    DBV=args.db_version
+    DBpath = DBpath.format(OUT=TA, DBV=DBV, DB=DB)
+    taxonomy_annotation(DB=DB, DBV=DBV, gap=args.gap, frac=args.min_fraction, 
                         T=args.threads, OUT=TA, FI=FI, DBpath=DBpath, MASK=args.mask_taxa, 
                         FETCH=FETCH, log=log)
-    if "GTDB" in DBpath or "GTDB" in FETCH:
-        print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
-    if "UNITE" in DBpath or "UNITE" in FETCH:
-        print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
-        print('Also, cite the version of UNITE database you used.')
-        print('Check citation here (General FASTA release): https://unite.ut.ee/repository.php#panel5a')
-    else:
-        print('\nPlease, cite the database you used.')
+    if FETCH:
+        if "GTDB" in FETCH:
+            print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
+        if "UNITE" in FETCH:
+            print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
+            print('Also, cite the version of UNITE database you used.')
+            print('Check citation here (General FASTA release): https://unite.ut.ee/repository.php#panel5a')
+    if not FETCH:
+        if "GTDB" in DBpath:
+            print('\nPlease, cite GTDB database: https://doi.org/10.1038/s41587-020-0501-8')
+        elif "UNITE" in DBpath:
+            print('\nPlease, cite UNITE database paper: https://doi.org/10.1093/nar/gkad1039')
+            print('Also, cite the version of UNITE database you used.')
+            print('Check citation here (General FASTA release): https://unite.ut.ee/repository.php#panel5a')
+        else:
+            print('\nPlease, cite the database you used.')
     print('\nPlease, cite BLAST: https://doi.org/10.1016/s0022-2836(05)80360-2')
     print(f"\nEnd of the {module.replace('_', ' ')} module")
     module = "NaMeco run successfully completed. Enjoy your data!"

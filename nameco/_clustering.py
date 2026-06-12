@@ -71,8 +71,10 @@ def kmer_counter(OUT, INPUT, SAMPLES, L, T, log):
 ###Functions for clustering
     
 #Function to cluster with UMAP + HDBscan
-def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
+def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, C_REPS, RSTAT, log,):
     import umap
+    
+    #clustering
     print('\nClustering sequences with UMAP and HDBscan...')
     print('"Noisy" (not assigned to any cluster) reads will be removed')
     skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}/clusters.tsv')
@@ -95,18 +97,28 @@ def clustering_UMAP_HDBscan(OUT, SAMPLES, T, EPS, CLUST_UQ, RSTAT, log,):
         clusters = pd.DataFrame({'Feature': data.index, 'Cluster': labels})
         clusters = clusters.loc[clusters.Cluster >= 0]
         clusters.Cluster = 'Cluster_' + clusters.Cluster.astype(str)
+        clusters.to_csv(f'{OUT}/{sample}/clusters.tsv', sep='\t', index=False)
+        bash(f'echo "{len(clusters)} features were clustered into {len(set(labels))} clusters" >> {log}')
+        
+    #subsampling
+    print(f'\nSelecting representative sequences ({C_REPS}) for between-samples clustering...')
+    skip, checks = log_checker(log, SAMPLES, f'{OUT}/{{}}/subsampled_ids.tsv')
+    for sample in SAMPLES:
+        if os.path.exists(f'{OUT}/{sample}/subsampled_ids.tsv') and sample in skip:
+            continue
+        clusters = pd.read_csv(f'{OUT}/{sample}/clusters.tsv', sep='\t')
+        data = pd.read_csv(f'{OUT}/{sample}/kmers.tsv', sep='\t', index_col=0)
         for cid in clusters.Cluster.unique():
             sub = clusters.loc[clusters.Cluster == cid].copy()
-            if len(sub) > 100:
-                sub = sub.sample(n=100, random_state=RSTAT)
+            if len(sub) > C_REPS:
+                sub = sub.sample(n=C_REPS, random_state=RSTAT)
             data = data.copy()
             data.loc[sub.Feature.tolist(),'FullID'] = sample+'___'+cid+'___'
         data = data[data['FullID'].notna()]
         data.FullID = data.FullID + data.index.astype(str)
         data.set_index('FullID', inplace=True)
         data.to_csv(f'{OUT}/{sample}/subsampled_ids.tsv', sep='\t')
-        clusters.to_csv(f'{OUT}/{sample}/clusters.tsv', sep='\t', index=False)
-        bash(f'echo "{len(clusters)} features were clustered into {len(set(labels))} clusters" >> {log}')   
+
     #cluster clusters
     dfs = []
     for sample in SAMPLES:

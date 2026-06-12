@@ -32,7 +32,16 @@ def read_correction(T, N, OUT, FI, log):
             bash(f"minimap2 -ax map-ont -t {T} {ta} {fq} -o {sam} 2>> {log}")
             #polishing with racon
             bash(f'echo "\nPolishing with Racon {cluster}" >> {log}')
-            bash(f'racon -m 8 -x -6 -g -8 -t {T} {fq} {sam} {ta} > {po} 2>> {log}')
+            try:
+                mapped = int(bash(f"samtools view -c -F 4 {sam}"))
+                if mapped == 0:
+                    bash(f'echo "WARNING: No mapped reads for {cluster}, using unpolished consensus" >> {log}')
+                    bash(f'cp {ta} {po}') # fall back to previous consensus
+                else:
+                    bash(f'racon -m 8 -x -6 -g -8 -t {T} {fq} {sam} {ta} > {po} 2>> {log}')
+            except Exception as e:
+                bash(f'echo "ERROR: Racon failed for {cluster}: {e}, using unpolished consensus" >> {log}')
+                bash(f'cp {ta} {po}')
             bash(f'rm {sam}')
             bash(f'echo "{cluster} done. Enjoy" >> {log}')
     #collect corrected sequences
