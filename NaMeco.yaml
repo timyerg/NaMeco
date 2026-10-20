@@ -18,6 +18,7 @@ dependencies:
 - spoa=4.1.4
 - ipykernel
 - samtools=1.21
+- lmdb=0.9.35
 - pigz
 - pip
 - pip:
